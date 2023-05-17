@@ -21,30 +21,30 @@ static unsigned float_to_byte(float value) {
 }
 
 
-void color_init(color_t *c, float red, float green, float blue) {
+void color_from_rgb(color_t *c, float red, float green, float blue) {
   c->red = red;
   c->green = green;
   c->blue = blue;
 }
 
 
-void color_init_hsv(color_t *c, float hue, float saturation, float value) {
+void color_from_hsv(color_t *c, float hue, float saturation, float value) {
   float rgb[3];
 
   hsv_to_rgb(rgb, hue, saturation, value);
-  color_init(c, rgb[0], rgb[1], rgb[2]);
+  color_from_rgb(c, rgb[0], rgb[1], rgb[2]);
 }
 
 
-void color_init_random(color_t *c) {
-  color_init(c, rand_normal(), rand_normal(), rand_normal());
+void color_from_random(color_t *c) {
+  color_from_rgb(c, rand_normal(), rand_normal(), rand_normal());
 }
 
 
 color_t color_copy(const color_t *src) {
   color_t dest;
 
-  color_init(&dest, src->red, src->green, src->blue);
+  color_from_rgb(&dest, src->red, src->green, src->blue);
   return dest;
 }
 
@@ -83,15 +83,15 @@ float color_v(const color_t *c) {
 
 
 void color_set_h(color_t *c, float hue) {
-  color_init_hsv(c, hue, color_s(c), color_v(c));
+  color_from_hsv(c, hue, color_s(c), color_v(c));
 }
 
 void color_set_s(color_t *c, float saturation) {
-  color_init_hsv(c, color_h(c), saturation, color_v(c));
+  color_from_hsv(c, color_h(c), saturation, color_v(c));
 }
 
 void color_set_v(color_t *c, float value) {
-  color_init_hsv(c, color_h(c), color_s(c), value);
+  color_from_hsv(c, color_h(c), color_s(c), value);
 }
 
 
@@ -104,7 +104,20 @@ void color_jitter_hsv(color_t *c, float max_jitter) {
   s = jitter_with_cap(s, max_jitter, 0.0f, 1.0f);
   v = jitter_with_cap(v, max_jitter, 0.0f, 1.0f);
 
-  color_init_hsv(c, h, s, v);
+  color_from_hsv(c, h, s, v);
+}
+
+
+void color_from_jittered_hsv_color(color_t *dest, color_t source, float hue_radius, float saturation_radius, float value_radius) {
+  float h = color_h(&source);
+  float s = color_s(&source);
+  float v = color_v(&source);
+
+  h = jitter_with_wrap(h, hue_radius, 0, 1);
+  s = jitter_with_cap(s, saturation_radius, 0, 1);
+  v = jitter_with_cap(s, value_radius, 0, 1);
+
+  color_from_hsv(dest, h, s, v);
 }
 
 

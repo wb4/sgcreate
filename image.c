@@ -272,7 +272,7 @@ static int set_fill_color(DrawingWand *draw, PixelWand *pixel, const color_t *co
 static int set_random_fill_color(DrawingWand *draw, PixelWand *pixel, const palette_t *palette) {
   color_t color;
 
-  palette_random_color(palette, &color);
+  palette_random_jittered_color(palette, &color);
 
   return set_fill_color(draw, pixel, &color);
 }
@@ -510,41 +510,21 @@ static int render_perlin_noise(image_t *image, float perlin_scale, void (*color_
 }
 
 
-static int fill_with_random_hue(image_t *image) {
-  int retval = 0;
-
-  MagickWand *wand = NULL;
-  if ((wand = NewMagickWand()) == NULL) return -1;
-
-  PixelWand *background;
-  if ((background = NewPixelWand()) == NULL) goto bad;
-  int hue = rand_in_range_int(0, 255);
-  char color_spec[64];
-  snprintf(color_spec, sizeof(color_spec), "hsv(%d,255,255)", hue);
-  if (PixelSetColor(background, color_spec) == MagickFalse) goto bad;
-
-  if (MagickNewImage(wand, image->width, image->height, background) == MagickFalse) goto bad;
-
-  if (magic_wand_to_allocated_image(wand, image) == -1) goto bad;
-
- cleanup:
-  if (background) DestroyPixelWand(background);
-  if (wand) DestroyMagickWand(wand);
-
-  return retval;
-
- bad:
-  retval = -1;
-  goto cleanup;
+void image_fill_with_color(image_t *image, color_t color) {
+  for (unsigned row = 0;  row < image->height;  row++) {
+    for (unsigned col = 0;  col < image->width;  col++) {
+      image_set_pixel_color(image, color, col, row);
+    }
+  }
 }
 
 
-static image_t *image_create_perlin(size_t width, size_t height) {
+static image_t *image_create_perlin(size_t width, size_t height, color_t color) {
   image_t *result = NULL;
   image_t *overlay = NULL;
 
   if ((result = image_create(width, height)) == NULL) goto bad;
-  if (fill_with_random_hue(result) == -1) goto bad;
+  image_fill_with_color(result, color);
 
   if ((overlay = image_create(width, height)) == NULL) goto bad;
 
@@ -566,10 +546,9 @@ static image_t *image_create_perlin(size_t width, size_t height) {
 }
 
 
-static image_t *image_create_random_dots(size_t width, size_t height) {
+static image_t *image_create_random_dots(size_t width, size_t height, palette_t *palette) {
   DrawingWand *draw = NULL;
-  PixelWand *black = NULL;
-  PixelWand *white = NULL;
+  PixelWand *color_wand = NULL;
 
   image_t *image = NULL;
   image_t *retval = NULL;
@@ -577,19 +556,17 @@ static image_t *image_create_random_dots(size_t width, size_t height) {
   float x, y;
 
   if ((draw = NewDrawingWand()) == NULL) goto bad;
-  if ((black = NewPixelWand()) == NULL) goto bad;
-  if ((white = NewPixelWand()) == NULL) goto bad;
-
-  if (PixelSetColor(black, "black") == MagickFalse) goto bad;
-  if (PixelSetColor(white, "white") == MagickFalse) goto bad;
+  if ((color_wand = NewPixelWand()) == NULL) goto bad;
 
   for (x = 0;  x < width;  x += 1.0f) {
     for (y = 0;  y < height;  y += 1.0f) {
-      if (rand_normal() < 0.5) {
-        DrawSetFillColor(draw, black);
-      } else {
-        DrawSetFillColor(draw, white);
-      }
+      color_t color;
+      palette_random_jittered_color(palette, &color);
+      char color_str[30];
+      color_magick_string(&color, color_str, sizeof(color_str));
+
+      if (PixelSetColor(color_wand, color_str) == MagickFalse) goto bad;
+      DrawSetFillColor(draw, color_wand);
       DrawPoint(draw, x, y);
     }
   }
@@ -599,8 +576,7 @@ static image_t *image_create_random_dots(size_t width, size_t height) {
   retval = image;
 
  cleanup:
-  if (black) DestroyPixelWand(black);
-  if (white) DestroyPixelWand(white);
+  if (color_wand) DestroyPixelWand(color_wand);
   if (draw) DestroyDrawingWand(draw);
 
   return retval;
@@ -612,24 +588,25 @@ static image_t *image_create_random_dots(size_t width, size_t height) {
 }
 
 
-image_t *image_create_random(size_t width, size_t height, pattern_t type) {
-  draw_object_t draw = NULL;
-  palette_t palette;
-
-  palette_random(&palette);
-
+image_t *image_create_random(size_t width, size_t height, pattern_t type, color_t color) {
   if (type == PATTERN_TYPE_RANDOM) {
     type = (pattern_t) ((rand() / (RAND_MAX + 1.0f)) * PATTERN_TYPE_COUNT);
   }
 
   if (type == PATTERN_TYPE_PERLIN) {
-    return image_create_perlin(width, height);
+    return image_create_perlin(width, height, color);
+  }
+
+  palette_t palette;
+  if (palette_new_around_color(&palette, color) == -1) {
+    return NULL;
   }
 
   if (type == PATTERN_TYPE_DOTS) {
-    return image_create_random_dots(width, height);
+    return image_create_random_dots(width, height, &palette);
   }
 
+  draw_object_t draw = NULL;
   switch (type) {
     case PATTERN_TYPE_POLYGONS:
       draw = draw_random_polygon;
@@ -720,6 +697,25 @@ void image_blend_overlay(image_t *dest, image_t *overlay, float overlay_opacity)
       image_set_pixel(dest, dest_pixel, col, row);
     }
   }
+}
+
+
+int image_color_from_string(color_t *dest, const char *str) {
+  int retval = 0;
+
+  PixelWand *color;
+  if ((color = NewPixelWand()) == NULL) goto bad;
+  if (PixelSetColor(color, str) == MagickFalse) goto bad;
+
+  color_from_rgb(dest, PixelGetRed(color), PixelGetGreen(color), PixelGetBlue(color));
+
+ cleanup:
+  if (color) DestroyPixelWand(color);
+  return retval;
+
+ bad:
+  retval = -1;
+  goto cleanup;
 }
 
 

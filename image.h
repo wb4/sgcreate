@@ -44,13 +44,17 @@ void image_set_pixel_color(image_t *image, color_t color, size_t x, size_t y);
 size_t image_get_width(const image_t *image);
 size_t image_get_height(const image_t *image);
 
-image_t *image_create_random(size_t width, size_t height, pattern_t type);
+image_t *image_create_random(size_t width, size_t height, pattern_t type, color_t color);
+
+void image_fill_with_color(image_t *image, color_t color);
 
 int image_add_noise(image_t *image);
 
 int image_scale(image_t *image, size_t width, size_t height);
 
 void image_blend_overlay(image_t *dest, image_t *overlay, float overlay_opacity);
+
+int image_color_from_string(color_t *dest, const char *str);
 
 pattern_t image_pattern_type_from_name(const char *name);
 

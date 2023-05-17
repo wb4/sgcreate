@@ -31,6 +31,11 @@ size_t rand_index(size_t length) {
 }
 
 
+int rand_bool(void) {
+  return rand() <= RAND_MAX / 2;
+}
+
+
 float cap_float(float value, float min, float max) {
   if (value < min) {
     return min;
@@ -57,10 +62,20 @@ float wrap_float(float value, float min, float max) {
 }
 
 
+float jitter(float value, float max_jitter) {
+  float jitter_fraction = powf(rand_normal(), 2);
+  if (rand_bool()) {
+    jitter_fraction = -jitter_fraction;
+  }
+
+  return value + jitter_fraction * max_jitter;
+}
+
+
 float jitter_with_cap(float value, float max_jitter, float min, float max) {
-  return cap_float(rand_in_range(value - max_jitter, value + max_jitter), min, max);
+  return cap_float(jitter(value, max_jitter), min, max);
 }
 
 float jitter_with_wrap(float value, float max_jitter, float min, float max) {
-  return wrap_float(rand_in_range(value - max_jitter, value + max_jitter), min, max);
+  return wrap_float(jitter(value, max_jitter), min, max);
 }

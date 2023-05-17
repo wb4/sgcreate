@@ -17,9 +17,9 @@ typedef struct {
 } palette_t;
 
 
-int palette_random(palette_t *p);
+int palette_new_around_color(palette_t *p, color_t mid_color);
 
-void palette_random_color(const palette_t *p, color_t *dest);
+void palette_random_jittered_color(const palette_t *p, color_t *dest);
 
 
 #endif

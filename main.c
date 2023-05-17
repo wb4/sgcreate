@@ -6,6 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "color.h"
 #include "list.h"
 #include "image.h"
 #include "heightmap.h"
@@ -30,6 +31,11 @@
 #define SEPARATION_MIN_DEFAULT ((float) (MIN_MAX_SEPARATION_RATIO * SEPARATION_MAX_DEFAULT))
 
 #define EDGE_ECHO_OFFSET_RATIO (0.1f)  /* This value times max separation = how many rows down to go in the texture image to prevent echo */
+
+#define TEXTURE_COLOR_MIN_SATURATION (0.5f)
+#define TEXTURE_COLOR_MAX_SATURATION (1)
+#define TEXTURE_COLOR_MIN_VALUE (0.2f)
+#define TEXTURE_COLOR_MAX_VALUE (0.5f)
 
 
 int ascii_to_ssize_t(const char *ascii, ssize_t *result) {
@@ -102,10 +108,10 @@ int ascii_to_float(const char *ascii, float *result) {
 }
 
 
-image_t *create_texture(size_t width, size_t height, pattern_t type) {
+image_t *create_texture(size_t width, size_t height, pattern_t type, color_t color) {
   image_t *texture;
 
-  if ((texture = image_create_random(width, height, type)) == NULL) {
+  if ((texture = image_create_random(width, height, type, color)) == NULL) {
     perror("image_create_random()");
   }
 
@@ -113,11 +119,11 @@ image_t *create_texture(size_t width, size_t height, pattern_t type) {
 }
 
 
-image_t *get_texture(const char *filename, size_t width, size_t height, pattern_t type) {
+image_t *get_texture(const char *filename, size_t width, size_t height, pattern_t type, color_t color) {
   image_t *image;
 
   if (filename == NULL) {
-    image = create_texture(width, height, type);
+    image = create_texture(width, height, type, color);
   } else {
     if ((image = image_read(filename)) == NULL) {
       perror("image_read()");
@@ -807,6 +813,14 @@ image_t *create_stereogram(heightmap_t *heightmap, image_t *texture, float eye_s
 }
 
 
+void initialize_generated_texture_color(color_t *color) {
+  float hue = rand_normal();
+  float saturation = rand_in_range(TEXTURE_COLOR_MIN_SATURATION, TEXTURE_COLOR_MAX_SATURATION);
+  float value = rand_in_range(TEXTURE_COLOR_MIN_VALUE, TEXTURE_COLOR_MAX_VALUE);
+  color_from_hsv(color, hue, saturation, value);
+}
+
+
 int main(int argc, char **argv) {
   heightmap_t *heightmap;
   image_t *texture;
@@ -827,6 +841,8 @@ int main(int argc, char **argv) {
   int add_noise = 0;
 
   pattern_t pattern_type = PATTERN_TYPE_RANDOM;
+
+  char color_spec[100] = "";
 
   const char *heightmap_file = NULL;
   const char *output_file = NULL;
@@ -858,6 +874,9 @@ int main(int argc, char **argv) {
                    "  -P  type of texture pattern to generate when the -t option is omitted.\n"
                    "      Valid values are 'perlin', 'polygons', 'ellipses', and 'dots'.  If omitted,\n"
 		   "      then a random pattern type will be selected for you.\n"
+		   "  -c  color of generated texture when the -t option is omitted.\n"
+		   "      E.g. \"blue\", \"#0000ff\", \"rgb(0,0,255)\", \"cmyk(100,100,100,10)\", etc.\n"
+		   "      If empty or omitted, then a random color will be used.\n"
                    "  -e  distance between the viewer's eyes, in pixels.  You probably want to\n"
                    "      leave this alone.  You might wish to change it if you're generating a \n"
                    "      hi-res stereogram to print as a poster.  Default %.2f\n"
@@ -874,7 +893,7 @@ int main(int argc, char **argv) {
   snprintf(usage, sizeof(usage), usagefmt, argv[0], SEPARATION_MAX_DEFAULT, MIN_MAX_SEPARATION_RATIO, SEPARATION_MIN_DEFAULT, MIN_MAX_SEPARATION_RATIO, EYE_SEPARATION_DEFAULT);
   usage[sizeof(usage)-1] = '\0';  /* just in case */
 
-  while ((o = getopt(argc, argv, "i:o:f:n:t:pNP:e:r:h")) != -1) {
+  while ((o = getopt(argc, argv, "i:o:f:n:t:pNP:c:e:r:h")) != -1) {
     switch (o) {
       case 'i':
         heightmap_file = optarg; break;
@@ -908,6 +927,9 @@ int main(int argc, char **argv) {
           return 1;
         }
         break;
+      case 'c':
+	strncpy(color_spec, optarg, sizeof(color_spec));
+	break;
       case 'e':
         if (ascii_to_float(optarg, &eye_separation) == -1) {
           fputs(usage, stderr);
@@ -995,13 +1017,24 @@ int main(int argc, char **argv) {
 
   image_init();  /* initialize the image library */
 
+  color_t generated_texture_color;
+  if (color_spec[0]) {
+    if (image_color_from_string(&generated_texture_color, color_spec) == -1) {
+      fputs(usage, stderr);
+      fprintf(stderr, "\nInvalid color string \"%s\" for -c\n\n", color_spec);
+      return 1;
+    }
+  } else {
+    initialize_generated_texture_color(&generated_texture_color);
+  }
+
   if ((heightmap = heightmap_read(heightmap_file)) == NULL) {
     return -1;
   }
 
   height = heightmap_get_height(heightmap);
 
-  if ((texture = get_texture(texture_file, (size_t) (0.5f + (separation_min + separation_max)), height, pattern_type)) == NULL) {
+  if ((texture = get_texture(texture_file, (size_t) (0.5f + (separation_min + separation_max)), height, pattern_type, generated_texture_color)) == NULL) {
     return 1;
   }
 

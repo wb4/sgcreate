@@ -13,9 +13,9 @@ typedef struct {
   float blue;
 } color_t;
 
-void color_init(color_t *c, float red, float green, float blue);
-void color_init_hsv(color_t *c, float hue, float saturation, float value);
-void color_init_random(color_t *c);
+void color_from_rgb(color_t *c, float red, float green, float blue);
+void color_from_hsv(color_t *c, float hue, float saturation, float value);
+void color_random(color_t *c);
 
 color_t color_copy(const color_t *src);
 
@@ -36,6 +36,7 @@ void color_set_s(color_t *c, float saturation);
 void color_set_v(color_t *c, float value);
 
 void color_jitter_hsv(color_t *c, float max_jitter);
+void color_from_jittered_hsv_color(color_t *dest, color_t source, float hue_radius, float saturation_radius, float value_radius);
 
 
 void color_magick_string(const color_t *c, char *dest, size_t len);
