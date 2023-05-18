@@ -1,6 +1,7 @@
 
 #include <errno.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -821,6 +822,22 @@ void initialize_generated_texture_color(color_t *color) {
 }
 
 
+void print_usage_and_fail(const char *usage, const char *fmt, ...) {
+  va_list ap;
+
+  fputs(usage, stderr);
+  fputc('\n', stderr);
+
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+
+  fputs("\n\n", stderr);
+
+  exit(1);
+}
+
+
 int main(int argc, char **argv) {
   heightmap_t *heightmap;
   image_t *texture;
@@ -901,16 +918,12 @@ int main(int argc, char **argv) {
         output_file = optarg; break;
       case 'f':
         if (ascii_to_float(optarg, &separation_max) == -1) {
-          fputs(usage, stderr);
-          fputs("\n-f requires a positive argument greater than 1.0\n\n", stderr);
-          return 1;
+          print_usage_and_fail(usage, "-f requires a positive argument greater than 1.0");
         }
         break;
       case 'n':
         if (ascii_to_float(optarg, &separation_min) == -1) {
-          fputs(usage, stderr);
-          fprintf(stderr, "\n-n requires a positive argument less than maximum separation (%f)\n\n", separation_max);
-          return 1;
+          print_usage_and_fail(usage, "-n requires a positive argument less than maximum separation (%f)", separation_max);
         }
         separation_min_specified = 1;
         break;
@@ -922,9 +935,7 @@ int main(int argc, char **argv) {
         add_noise = 1;  break;
       case 'P':
         if ((pattern_type = image_pattern_type_from_name(optarg)) == -1) {
-          fputs(usage, stderr);
-          fprintf(stderr, "\nInvalid pattern type for -P: %s\n\n", optarg);
-          return 1;
+          print_usage_and_fail(usage, "Invalid pattern type for -P: %s", optarg);
         }
         break;
       case 'c':
@@ -932,16 +943,12 @@ int main(int argc, char **argv) {
 	break;
       case 'e':
         if (ascii_to_float(optarg, &eye_separation) == -1) {
-          fputs(usage, stderr);
-          fputs("\n-e requires a positive argument\n\n", stderr);
-          return 1;
+          print_usage_and_fail(usage, "-e requires a positive argument");
         }
         break;
       case 'r':
         if (ascii_to_ssize_t(optarg, &edge_echo_offset) == -1) {
-          fputs(usage, stderr);
-          fputs("\n-r requires a non-zero integer argument\n\n", stderr);
-          return 1;
+          print_usage_and_fail(usage, "-r requires a non-zero integer argument");
         }
         edge_echo_offset_specified = 1;
         break;
@@ -970,47 +977,33 @@ int main(int argc, char **argv) {
   }
 
   if (heightmap_file == NULL) {
-    fputs(usage, stderr);
-    fputs("\nMissing required parameter: -i\n\n", stderr);
-    return 1;
+    print_usage_and_fail(usage, "Missing required parameter: -i");
   }
 
   if (output_file == NULL) {
-    fputs(usage, stderr);
-    fputs("\nMissing required parameter: -o\n\n", stderr);
-    return 1;
+    print_usage_and_fail(usage, "Missing required parameter: -o");
   }
 
   if (separation_max <= 1.0f) {
-    fputs(usage, stderr);
-    fputs("\n-f requires a positive argument greater than 1.0\n\n", stderr);
-    return 1;
+    print_usage_and_fail(usage, "-f requires a positive argument greater than 1.0");
   }
   if (!separation_min_specified) {
     separation_min = MIN_MAX_SEPARATION_RATIO * separation_max;
   }
   if (separation_min <= 0.0f || separation_min >= separation_max) {
-    fputs(usage, stderr);
-    fprintf(stderr, "\n-n requires a positive argument less than maximum separation (%f)\n\n", separation_max);
-    return 1;
+    print_usage_and_fail(usage, "-n requires a positive argument less than maximum separation (%f)", separation_max);
   }
   if (eye_separation <= 0.0f) {
-    fputs(usage, stderr);
-    fputs("\n-e requires a positive argument\n\n", stderr);
-    return 1;
+    print_usage_and_fail(usage, "-e requires a positive argument");
   }
   if (separation_max >= eye_separation) {
-    fputs(usage, stderr);
-    fputs("\neye separation must be greater than maximum separation\n\n", stderr);
-    return 1;
+    print_usage_and_fail(usage, "eye separation must be greater than maximum separation");
   }
   if (!edge_echo_offset_specified) {
     edge_echo_offset = (ssize_t) (EDGE_ECHO_OFFSET_RATIO * separation_max);
   }
   if (edge_echo_offset == 0) {
-    fputs(usage, stderr);
-    fputs("\n-r requires a non-zero integer argument\n\n", stderr);
-    return 1;
+    print_usage_and_fail(usage, "-r requires a non-zero integer argument");
   }
 
   srand(time(NULL));
@@ -1020,9 +1013,7 @@ int main(int argc, char **argv) {
   color_t generated_texture_color;
   if (color_spec[0]) {
     if (image_color_from_string(&generated_texture_color, color_spec) == -1) {
-      fputs(usage, stderr);
-      fprintf(stderr, "\nInvalid color string \"%s\" for -c\n\n", color_spec);
-      return 1;
+      print_usage_and_fail(usage, "Invalid color string \"%s\" for -c", color_spec);
     }
   } else {
     initialize_generated_texture_color(&generated_texture_color);
