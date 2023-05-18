@@ -11,35 +11,30 @@ LFLAGS=
 .c.o:
 	$(CC) $(CFLAGS) -c $<
 
-all: sgcreate ply2pov
+all: sgcreate
 
 clean:
-	rm -rf sgcreate ply2pov *.o
+	rm -rf sgcreate *.o
 
-sgcreate: main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o
-	$(CC) $(LFLAGS) -o sgcreate main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o $(LIBS)
+sgcreate: main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o length.o
+	$(CC) $(LFLAGS) -o sgcreate main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o length.o $(LIBS)
 
-main.o: main.c list.h control_point.h color.h util.h heightmap.h image.h
+main.o: main.c heightmap.h control_point.h length.h util.h color.h list.h image.h
 
 list.o: list.c control_point.h list.h
 
 control_point.o: control_point.c control_point.h
 
-image.o: image.c perlin.h palette.h util.h image.h color.h
+image.o: image.c util.h image.h perlin.h color.h palette.h
 
-heightmap.o: heightmap.c heightmap.h util.h image.h color.h
+heightmap.o: heightmap.c heightmap.h util.h color.h image.h
 
-color.o: color.c color.h util.h
+color.o: color.c util.h color.h
 
-palette.o: palette.c palette.h color.h util.h
+palette.o: palette.c palette.h util.h color.h
 
 util.o: util.c util.h
 
 perlin.o: perlin.c util.h perlin.h
 
-
-ply2pov: ply2pov.o
-	$(CC) -O -Wall -o ply2pov ply2pov.o
-
-ply2pov.o: ply2pov.c
-	$(CC) -O -Wall -c ply2pov.c
+length.o: length.c length.h

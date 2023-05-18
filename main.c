@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "color.h"
+#include "length.h"
 #include "list.h"
 #include "image.h"
 #include "heightmap.h"
@@ -24,12 +25,14 @@
    misconvergence for the viewer.  Let's try 0.65
 */
 
-#define EYE_SEPARATION_DEFAULT (280.0f)
+#define EYE_SEPARATION_DEFAULT_MILLIS (62.0f)
 
 #define MIN_MAX_SEPARATION_RATIO (0.65f)
 
-#define SEPARATION_MAX_DEFAULT (0.7f * EYE_SEPARATION_DEFAULT)
-#define SEPARATION_MIN_DEFAULT ((float) (MIN_MAX_SEPARATION_RATIO * SEPARATION_MAX_DEFAULT))
+#define SEPARATION_MAX_DEFAULT_MILLIS (0.6f * EYE_SEPARATION_DEFAULT_MILLIS)
+#define SEPARATION_MIN_DEFAULT_MILLIS ((float) (MIN_MAX_SEPARATION_RATIO * SEPARATION_MAX_DEFAULT_MILLIS))
+
+#define DISPLAY_WIDTH_DEFAULT_INCHES (14.0f)
 
 #define EDGE_ECHO_OFFSET_RATIO (0.1f)  /* This value times max separation = how many rows down to go in the texture image to prevent echo */
 
@@ -762,6 +765,7 @@ int color_row(image_t *sg, size_t row, image_t *texture, list_t *points, ssize_t
 
 
 int generate_row(image_t *sg, size_t row, heightmap_t *heightmap, image_t *texture, float eye_separation, float separation_min, float separation_max, ssize_t edge_echo_offset) {
+  int retval = 0;
   list_t points;
 
   if (list_init(&points) == -1) {
@@ -769,21 +773,20 @@ int generate_row(image_t *sg, size_t row, heightmap_t *heightmap, image_t *textu
     return -1;
   }
 
-  if (generate_control_points(&points, row, heightmap, eye_separation, separation_min, separation_max) == -1) {
-    list_destroy(&points);
-    return -1;
-  }
+  if (generate_control_points(&points, row, heightmap, eye_separation, separation_min, separation_max) == -1) goto bad;
 
   /* All right.  Now that we have all the control points for this row,
      it's time to color the pixels. */
-  if (color_row(sg, row, texture, &points, edge_echo_offset) == -1) {
-    list_destroy(&points);
-    return -1;
-  }
+  if (color_row(sg, row, texture, &points, edge_echo_offset) == -1) goto bad;
 
+ cleanup:
   list_destroy(&points);
 
-  return 0;
+  return retval;
+
+ bad:
+  retval = -1;
+  goto cleanup;
 }
 
 
@@ -793,8 +796,6 @@ image_t *create_stereogram(heightmap_t *heightmap, image_t *texture, float eye_s
   unsigned long width;
   unsigned long height;
 
-  size_t i;
-
   width  = heightmap_get_width(heightmap);
   height = heightmap_get_height(heightmap);
 
@@ -803,8 +804,8 @@ image_t *create_stereogram(heightmap_t *heightmap, image_t *texture, float eye_s
     return NULL;
   }
 
-  for (i = 0;  i < height;  ++i) {
-    if (generate_row(sg, i, heightmap, texture, eye_separation, separation_min, separation_max, edge_echo_offset) == -1 ) {
+  for (size_t row = 0;  row < height;  row++) {
+    if (generate_row(sg, row, heightmap, texture, eye_separation, separation_min, separation_max, edge_echo_offset) == -1 ) {
       image_destroy(sg);
       return NULL;
     }
@@ -843,15 +844,16 @@ int main(int argc, char **argv) {
   image_t *texture;
   image_t *output;
 
-  float eye_separation = EYE_SEPARATION_DEFAULT;
+  length_t eye_separation = length_from_millimeters(EYE_SEPARATION_DEFAULT_MILLIS);
 
-  float separation_max = SEPARATION_MAX_DEFAULT;
-  float separation_min = SEPARATION_MIN_DEFAULT;
+  length_t separation_max = length_from_millimeters(SEPARATION_MAX_DEFAULT_MILLIS);
+  length_t separation_min = length_from_millimeters(SEPARATION_MIN_DEFAULT_MILLIS);
+
+  length_t display_width = length_from_inches(DISPLAY_WIDTH_DEFAULT_INCHES);
 
   ssize_t edge_echo_offset;
 
   int separation_min_specified = 0;
-  int edge_echo_offset_specified = 0;
 
   int preserve_height = 0;
 
@@ -875,13 +877,20 @@ int main(int argc, char **argv) {
                    " * Rainbow.  Redder hues represent shallower depth.  This gives more depth\n"
                    "   resolution than grayscale.\n"
                    "\n"
+		   "For the -f, -n, and -s options (see below), the value is specified as a length with\n"
+		   "units.  Accepted units are meters, centimeters, millimeters, and inches.\n"
+		   "These can be abbreviated as m, cm, mm, and in, respectively.\n"
+		   "\n"
                    "Options:\n"
                    "\n"
-                   "  -f  maximum separation in pixels.  Default %.2f\n"
+                   "  -f  maximum separation.  Default %s\n"
                    "      If -f is specified but -n (see below) is not, then -n defaults\n"
-                   "      to %.2f * -f\n"
-                   "  -n  minimum separation in pixels.  Default %.2f, or %.2f * -f\n"
+                   "      to %g * -f\n"
+                   "  -n  minimum separation.  Default %s, or %g * -f\n"
                    "      if -f is specified and -n is not.\n"
+		   "  -s  physical width of target display device.  Set this if you're rendering for\n"
+		   "      a very large display such as a poster, or a very small one like a phone.\n"
+		   "      Default is %s, which is suitable for a typical laptop screen.\n"
                    "  -t  optional texture image file to use.  If this option is not provided,\n"
                    "      then a random texture will be generated.\n"
                    "  -p  preserve the height of the texture.  Use this option if, for example,\n"
@@ -894,38 +903,42 @@ int main(int argc, char **argv) {
 		   "  -c  color of generated texture when the -t option is omitted.\n"
 		   "      E.g. \"blue\", \"#0000ff\", \"rgb(0,0,255)\", \"cmyk(100,100,100,10)\", etc.\n"
 		   "      If empty or omitted, then a random color will be used.\n"
-                   "  -e  distance between the viewer's eyes, in pixels.  You probably want to\n"
-                   "      leave this alone.  You might wish to change it if you're generating a \n"
-                   "      hi-res stereogram to print as a poster.  Default %.2f\n"
-                   "  -r  for inserted texture at the edges of foreground objects, how many rows\n"
-                   "      to offset in the texture to prevent artifacts.  You probably don't need\n"
-                   "      to mess with this, ever.  By default it is calculated based on the max\n"
-                   "      separation parameter.\n"
                    "  -h  print this usage text and exit.\n";
 
   char usage[2048];
 
   int o;
 
-  snprintf(usage, sizeof(usage), usagefmt, argv[0], SEPARATION_MAX_DEFAULT, MIN_MAX_SEPARATION_RATIO, SEPARATION_MIN_DEFAULT, MIN_MAX_SEPARATION_RATIO, EYE_SEPARATION_DEFAULT);
+  char separation_max_default_str[50];
+  length_fmt_millimeters(separation_max, separation_max_default_str, sizeof(separation_max_default_str));
+  char separation_min_default_str[50];
+  length_fmt_millimeters(separation_min, separation_min_default_str, sizeof(separation_min_default_str));
+  char display_width_default_str[50];
+  length_fmt_centimeters(display_width, display_width_default_str, sizeof(display_width_default_str));
+  snprintf(usage, sizeof(usage), usagefmt, argv[0], separation_max_default_str, MIN_MAX_SEPARATION_RATIO, separation_min_default_str, MIN_MAX_SEPARATION_RATIO, display_width_default_str);
   usage[sizeof(usage)-1] = '\0';  /* just in case */
 
-  while ((o = getopt(argc, argv, "i:o:f:n:t:pNP:c:e:r:h")) != -1) {
+  while ((o = getopt(argc, argv, "i:o:f:n:s:t:pNP:c:h")) != -1) {
     switch (o) {
       case 'i':
         heightmap_file = optarg; break;
       case 'o':
         output_file = optarg; break;
       case 'f':
-        if (ascii_to_float(optarg, &separation_max) == -1) {
-          print_usage_and_fail(usage, "-f requires a positive argument greater than 1.0");
+        if (length_from_string(&separation_max, optarg) == -1) {
+          print_usage_and_fail(usage, "-f requires a valid positive length specifier");
         }
         break;
       case 'n':
-        if (ascii_to_float(optarg, &separation_min) == -1) {
-          print_usage_and_fail(usage, "-n requires a positive argument less than maximum separation (%f)", separation_max);
+        if (length_from_string(&separation_min, optarg) == -1) {
+          print_usage_and_fail(usage, "-n requires a valid positive length specifier less than maximum separation");
         }
         separation_min_specified = 1;
+        break;
+      case 's':
+        if (length_from_string(&display_width, optarg) == -1) {
+          print_usage_and_fail(usage, "-s requires a valid positive length specifier");
+        }
         break;
       case 't':
         texture_file = optarg; break;
@@ -941,17 +954,6 @@ int main(int argc, char **argv) {
       case 'c':
 	strncpy(color_spec, optarg, sizeof(color_spec));
 	break;
-      case 'e':
-        if (ascii_to_float(optarg, &eye_separation) == -1) {
-          print_usage_and_fail(usage, "-e requires a positive argument");
-        }
-        break;
-      case 'r':
-        if (ascii_to_ssize_t(optarg, &edge_echo_offset) == -1) {
-          print_usage_and_fail(usage, "-r requires a non-zero integer argument");
-        }
-        edge_echo_offset_specified = 1;
-        break;
       case 'h':
         fputs(usage, stdout);
         fputc('\n', stdout);
@@ -984,26 +986,19 @@ int main(int argc, char **argv) {
     print_usage_and_fail(usage, "Missing required parameter: -o");
   }
 
-  if (separation_max <= 1.0f) {
-    print_usage_and_fail(usage, "-f requires a positive argument greater than 1.0");
+  if (length_meters(separation_max) <= 0.0f) {
+    print_usage_and_fail(usage, "-f requires a valid positive length specifier");
   }
   if (!separation_min_specified) {
-    separation_min = MIN_MAX_SEPARATION_RATIO * separation_max;
+    separation_min = length_scale(separation_max, MIN_MAX_SEPARATION_RATIO);
   }
-  if (separation_min <= 0.0f || separation_min >= separation_max) {
+  if (length_meters(separation_min) <= 0.0f || length_cmp(separation_min, separation_max) >= 0) {
     print_usage_and_fail(usage, "-n requires a positive argument less than maximum separation (%f)", separation_max);
   }
-  if (eye_separation <= 0.0f) {
-    print_usage_and_fail(usage, "-e requires a positive argument");
-  }
-  if (separation_max >= eye_separation) {
-    print_usage_and_fail(usage, "eye separation must be greater than maximum separation");
-  }
-  if (!edge_echo_offset_specified) {
-    edge_echo_offset = (ssize_t) (EDGE_ECHO_OFFSET_RATIO * separation_max);
-  }
-  if (edge_echo_offset == 0) {
-    print_usage_and_fail(usage, "-r requires a non-zero integer argument");
+  if (length_cmp(separation_max, eye_separation) >= 0) {
+    char buff[50];
+    length_fmt_millimeters(eye_separation, buff, sizeof(buff));
+    print_usage_and_fail(usage, "maximum separation must be less than average pupil separation of %s", buff);
   }
 
   srand(time(NULL));
@@ -1023,9 +1018,15 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  height = heightmap_get_height(heightmap);
+  float pixels_per_meter = heightmap_get_width(heightmap) / length_meters(display_width);
 
-  if ((texture = get_texture(texture_file, (size_t) (0.5f + (separation_min + separation_max)), height, pattern_type, generated_texture_color)) == NULL) {
+  float separation_max_pixels = pixels_per_meter * length_meters(separation_max);
+  float separation_min_pixels = pixels_per_meter * length_meters(separation_min);
+
+  float eye_separation_pixels = pixels_per_meter * length_meters(eye_separation);
+
+  height = heightmap_get_height(heightmap);
+  if ((texture = get_texture(texture_file, (size_t) (0.5f + (separation_min_pixels + separation_max_pixels)), height, pattern_type, generated_texture_color)) == NULL) {
     return 1;
   }
 
@@ -1035,7 +1036,7 @@ int main(int argc, char **argv) {
        in the output it will be horizontally scaled to between separation_min and separation_max.
        We'd like to keep the aspect ratio of the texture for aesthetic purposes, so let's go ahead
        and scale it vertically such that it will look good in the stereogram. */
-    if (scale_texture_height(texture, 0.5f * (separation_min + separation_max)) == -1) {
+    if (scale_texture_height(texture, 0.5f * (separation_min_pixels + separation_max_pixels)) == -1) {
       return 1;
     }
   }
@@ -1046,7 +1047,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  if ((output = create_stereogram(heightmap, texture, eye_separation, separation_min, separation_max, edge_echo_offset)) == NULL) {
+  edge_echo_offset = (ssize_t) (EDGE_ECHO_OFFSET_RATIO * separation_max_pixels);
+
+  if ((output = create_stereogram(heightmap, texture, eye_separation_pixels, separation_min_pixels, separation_max_pixels, edge_echo_offset)) == NULL) {
     return -1;
   }
 
