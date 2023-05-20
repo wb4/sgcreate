@@ -3,6 +3,7 @@
 #define IMAGE_H
 
 #include "color.h"
+#include "metrics.h"
 
 #include <stdlib.h>
 
@@ -44,7 +45,7 @@ void image_set_pixel_color(image_t *image, color_t color, size_t x, size_t y);
 size_t image_get_width(const image_t *image);
 size_t image_get_height(const image_t *image);
 
-image_t *image_create_random(size_t width, size_t height, pattern_t type, color_t color);
+image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, color_t color);
 
 void image_fill_with_color(image_t *image, color_t color);
 

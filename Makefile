@@ -16,25 +16,25 @@ all: sgcreate
 clean:
 	rm -rf sgcreate *.o
 
-sgcreate: main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o length.o
-	$(CC) $(LFLAGS) -o sgcreate main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o length.o $(LIBS)
+sgcreate: main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o metrics.o
+	$(CC) $(LFLAGS) -o sgcreate main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o metrics.o $(LIBS)
 
-main.o: main.c heightmap.h control_point.h length.h util.h color.h list.h image.h
+main.o: main.c util.h control_point.h heightmap.h image.h list.h metrics.h color.h
 
 list.o: list.c control_point.h list.h
 
 control_point.o: control_point.c control_point.h
 
-image.o: image.c util.h image.h perlin.h color.h palette.h
+image.o: image.c color.h image.h metrics.h util.h palette.h perlin.h
 
-heightmap.o: heightmap.c heightmap.h util.h color.h image.h
+heightmap.o: heightmap.c color.h util.h heightmap.h metrics.h image.h
 
 color.o: color.c util.h color.h
 
-palette.o: palette.c palette.h util.h color.h
+palette.o: palette.c util.h color.h palette.h
 
 util.o: util.c util.h
 
-perlin.o: perlin.c util.h perlin.h
+perlin.o: perlin.c perlin.h util.h
 
-length.o: length.c length.h
+metrics.o: metrics.c metrics.h

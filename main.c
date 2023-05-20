@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #include "color.h"
-#include "length.h"
+#include "metrics.h"
 #include "list.h"
 #include "image.h"
 #include "heightmap.h"
@@ -112,10 +112,10 @@ int ascii_to_float(const char *ascii, float *result) {
 }
 
 
-image_t *create_texture(size_t width, size_t height, pattern_t type, color_t color) {
+image_t *create_texture(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, color_t color) {
   image_t *texture;
 
-  if ((texture = image_create_random(width, height, type, color)) == NULL) {
+  if ((texture = image_create_random(width, height, pixel_density, type, color)) == NULL) {
     perror("image_create_random()");
   }
 
@@ -123,11 +123,11 @@ image_t *create_texture(size_t width, size_t height, pattern_t type, color_t col
 }
 
 
-image_t *get_texture(const char *filename, size_t width, size_t height, pattern_t type, color_t color) {
+image_t *get_texture(const char *filename, size_t width, size_t height, linear_density_t pixel_density, pattern_t type, color_t color) {
   image_t *image;
 
   if (filename == NULL) {
-    image = create_texture(width, height, type, color);
+    image = create_texture(width, height, pixel_density, type, color);
   } else {
     if ((image = image_read(filename)) == NULL) {
       perror("image_read()");
@@ -868,8 +868,6 @@ int main(int argc, char **argv) {
 
   const char *texture_file = NULL;
 
-  long unsigned height;
-
   char *usagefmt = "\nUsage: %s [options] -i <depthmap_image> -o <output_image>\n"
                    "\n"
                    "Depthmap is an image that is one of two types:\n"
@@ -1018,15 +1016,18 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  float pixels_per_meter = heightmap_get_width(heightmap) / length_meters(display_width);
+  unsigned output_width = heightmap_get_width(heightmap);
+  unsigned output_height = heightmap_get_height(heightmap);
 
-  float separation_max_pixels = pixels_per_meter * length_meters(separation_max);
-  float separation_min_pixels = pixels_per_meter * length_meters(separation_min);
+  linear_density_t pixel_density = linear_density(output_width, display_width);
 
-  float eye_separation_pixels = pixels_per_meter * length_meters(eye_separation);
+  float separation_min_pixels = count_per_length(pixel_density, separation_min);
+  float separation_max_pixels = count_per_length(pixel_density, separation_max);
+  float separation_average_pixels = 0.5f * (separation_min_pixels + separation_max_pixels);
 
-  height = heightmap_get_height(heightmap);
-  if ((texture = get_texture(texture_file, (size_t) (0.5f + (separation_min_pixels + separation_max_pixels)), height, pattern_type, generated_texture_color)) == NULL) {
+  float eye_separation_pixels = count_per_length(pixel_density, eye_separation);
+
+  if ((texture = get_texture(texture_file, (size_t) separation_average_pixels, output_height, pixel_density, pattern_type, generated_texture_color)) == NULL) {
     return 1;
   }
 
@@ -1036,7 +1037,7 @@ int main(int argc, char **argv) {
        in the output it will be horizontally scaled to between separation_min and separation_max.
        We'd like to keep the aspect ratio of the texture for aesthetic purposes, so let's go ahead
        and scale it vertically such that it will look good in the stereogram. */
-    if (scale_texture_height(texture, 0.5f * (separation_min_pixels + separation_max_pixels)) == -1) {
+    if (scale_texture_height(texture, separation_average_pixels) == -1) {
       return 1;
     }
   }

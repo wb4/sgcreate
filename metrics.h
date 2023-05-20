@@ -1,5 +1,5 @@
-#ifndef LENGTH_H
-#define LENGTH_H
+#ifndef METRICS_H
+#define METRICS_H
 
 #include <stddef.h>
 
@@ -45,5 +45,15 @@ void length_fmt_millimeters(length_t length, char *dest, size_t dest_len);
 length_t length_scale(length_t length, float scale);
 
 int length_cmp(length_t a, length_t b);
+
+
+typedef struct {
+  unsigned count;
+  length_t length;
+} linear_density_t;
+
+linear_density_t linear_density(unsigned count, length_t length);
+
+float count_per_length(linear_density_t linear_density, length_t length);
 
 #endif

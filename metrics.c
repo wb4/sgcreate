@@ -1,4 +1,4 @@
-#include "length.h"
+#include "metrics.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -117,4 +117,13 @@ int length_cmp(length_t a, length_t b) {
   } else {
     return 0;
   }
+}
+
+linear_density_t linear_density(unsigned count, length_t length) {
+  linear_density_t result = { .count = count, .length = length };
+  return result;
+}
+
+float count_per_length(linear_density_t linear_density, length_t length) {
+  return length.meters / linear_density.length.meters * linear_density.count;
 }

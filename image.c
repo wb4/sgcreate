@@ -16,11 +16,13 @@
 #define OPACITY_MIN (0.5f)
 #define OPACITY_MAX (1.0f)
 
-#define OBJECT_RADIUS_MIN (5.0f)
-#define OBJECT_RADIUS_MAX (20.0f)
+#define OBJECT_RADIUS_MIN_MILLIS (1.0f)
+#define OBJECT_RADIUS_MAX_MILLIS (3.5f)
 
-#define PERLIN_INNER_SCALE (10.0f)
-#define PERLIN_OUTER_SCALE (40.0f)
+#define PERLIN_INNER_LENGTH_MILLIS (1.5f)
+#define PERLIN_OUTER_LENGTH_MILLIS (6.0f)
+
+#define DOT_WIDTH_MILLIS (0.5f)
 
 #define PERLIN_INNER_OPACITY (0.6f)
 #define PERLIN_OUTER_OPACITY (0.8f)
@@ -379,7 +381,7 @@ int draw_random_polygon(DrawingWand *draw, PixelWand *pixel, float x, float y, f
 }
 
 
-static image_t *image_create_random_objects(size_t width, size_t height, draw_object_t draw_object, const palette_t *palette) {
+static image_t *image_create_random_objects(size_t width, size_t height, linear_density_t pixel_density, draw_object_t draw_object, const palette_t *palette) {
   DrawingWand *draw = NULL;
   PixelWand *pixel = NULL;
   size_t object_count;
@@ -387,20 +389,22 @@ static image_t *image_create_random_objects(size_t width, size_t height, draw_ob
   image_t *image = NULL;
   image_t *retval = NULL;
 
-  size_t i;
-
-  float x, y;
-
   if ((draw = NewDrawingWand()) == NULL) goto bad;
   if ((pixel = NewPixelWand()) == NULL) goto bad;
 
   object_count = width * height / 20;
 
-  for (i = 0;  i < object_count;  ++i) {
-    x = rand_normal() * width;
-    y = rand_normal() * height;
+  length_t object_radius_min = length_from_millimeters(OBJECT_RADIUS_MIN_MILLIS);
+  length_t object_radius_max = length_from_millimeters(OBJECT_RADIUS_MAX_MILLIS);
 
-    if (draw_object(draw, pixel, x, y, OBJECT_RADIUS_MIN, OBJECT_RADIUS_MAX, width, palette) == -1) goto bad;
+  float object_radius_min_pixels = count_per_length(pixel_density, object_radius_min);
+  float object_radius_max_pixels = count_per_length(pixel_density, object_radius_max);
+
+  for (size_t i = 0;  i < object_count;  ++i) {
+    float x = rand_normal() * width;
+    float y = rand_normal() * height;
+
+    if (draw_object(draw, pixel, x, y, object_radius_min_pixels, object_radius_max_pixels, width, palette) == -1) goto bad;
   }
 
   if ((image = drawing_wand_to_image(draw, width, height)) == NULL) goto bad;
@@ -519,7 +523,7 @@ void image_fill_with_color(image_t *image, color_t color) {
 }
 
 
-static image_t *image_create_perlin(size_t width, size_t height, color_t color) {
+static image_t *image_create_perlin(size_t width, size_t height, linear_density_t pixel_density, color_t color) {
   image_t *result = NULL;
   image_t *overlay = NULL;
 
@@ -528,10 +532,15 @@ static image_t *image_create_perlin(size_t width, size_t height, color_t color) 
 
   if ((overlay = image_create(width, height)) == NULL) goto bad;
 
-  if (render_perlin_noise(overlay, PERLIN_INNER_SCALE, inner_perlin_color_map) == -1) goto bad;
+  length_t inner_length = length_from_millimeters(PERLIN_INNER_LENGTH_MILLIS);
+  length_t outer_length = length_from_millimeters(PERLIN_OUTER_LENGTH_MILLIS);
+  float inner_scale = count_per_length(pixel_density, inner_length);
+  float outer_scale = count_per_length(pixel_density, outer_length);
+
+  if (render_perlin_noise(overlay, inner_scale, inner_perlin_color_map) == -1) goto bad;
   image_blend_overlay(result, overlay, PERLIN_INNER_OPACITY);
 
-  if (render_perlin_noise(overlay, PERLIN_OUTER_SCALE, outer_perlin_color_map) == -1) goto bad;
+  if (render_perlin_noise(overlay, outer_scale, outer_perlin_color_map) == -1) goto bad;
   image_blend_overlay(result, overlay, PERLIN_OUTER_OPACITY);
   
  cleanup:
@@ -546,20 +555,21 @@ static image_t *image_create_perlin(size_t width, size_t height, color_t color) 
 }
 
 
-static image_t *image_create_random_dots(size_t width, size_t height, palette_t *palette) {
+static image_t *image_create_random_dots(size_t width, size_t height, linear_density_t pixel_density, palette_t *palette) {
   DrawingWand *draw = NULL;
   PixelWand *color_wand = NULL;
 
   image_t *image = NULL;
   image_t *retval = NULL;
 
-  float x, y;
-
   if ((draw = NewDrawingWand()) == NULL) goto bad;
   if ((color_wand = NewPixelWand()) == NULL) goto bad;
 
-  for (x = 0;  x < width;  x += 1.0f) {
-    for (y = 0;  y < height;  y += 1.0f) {
+  length_t dot_width = length_from_millimeters(DOT_WIDTH_MILLIS);
+  float dot_width_pixels = count_per_length(pixel_density, dot_width);
+
+  for (float x = 0;  x < width;  x += dot_width_pixels) {
+    for (float y = 0;  y < height;  y += dot_width_pixels) {
       color_t color;
       palette_random_jittered_color(palette, &color);
       char color_str[30];
@@ -567,7 +577,7 @@ static image_t *image_create_random_dots(size_t width, size_t height, palette_t 
 
       if (PixelSetColor(color_wand, color_str) == MagickFalse) goto bad;
       DrawSetFillColor(draw, color_wand);
-      DrawPoint(draw, x, y);
+      DrawRectangle(draw, x, y, x + dot_width_pixels, y + dot_width_pixels);
     }
   }
 
@@ -588,13 +598,13 @@ static image_t *image_create_random_dots(size_t width, size_t height, palette_t 
 }
 
 
-image_t *image_create_random(size_t width, size_t height, pattern_t type, color_t color) {
+image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, color_t color) {
   if (type == PATTERN_TYPE_RANDOM) {
     type = (pattern_t) ((rand() / (RAND_MAX + 1.0f)) * PATTERN_TYPE_COUNT);
   }
 
   if (type == PATTERN_TYPE_PERLIN) {
-    return image_create_perlin(width, height, color);
+    return image_create_perlin(width, height, pixel_density, color);
   }
 
   palette_t palette;
@@ -603,7 +613,7 @@ image_t *image_create_random(size_t width, size_t height, pattern_t type, color_
   }
 
   if (type == PATTERN_TYPE_DOTS) {
-    return image_create_random_dots(width, height, &palette);
+    return image_create_random_dots(width, height, pixel_density, &palette);
   }
 
   draw_object_t draw = NULL;
@@ -619,7 +629,7 @@ image_t *image_create_random(size_t width, size_t height, pattern_t type, color_
       return NULL;
   }
 
-  return image_create_random_objects(width, height, draw, &palette);
+  return image_create_random_objects(width, height, pixel_density, draw, &palette);
 }
 
 
