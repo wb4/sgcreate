@@ -875,7 +875,7 @@ int main(int argc, char **argv) {
                    " * Rainbow.  Redder hues represent shallower depth.  This gives more depth\n"
                    "   resolution than grayscale.\n"
                    "\n"
-		   "For the -f, -n, and -s options (see below), the value is specified as a length with\n"
+		   "For the -f, -n, and -w options (see below), the value is specified as a length with\n"
 		   "units.  Accepted units are meters, centimeters, millimeters, and inches.\n"
 		   "These can be abbreviated as m, cm, mm, and in, respectively.\n"
 		   "\n"
@@ -886,7 +886,7 @@ int main(int argc, char **argv) {
                    "      to %g * -f\n"
                    "  -n  minimum separation.  Default %s, or %g * -f\n"
                    "      if -f is specified and -n is not.\n"
-		   "  -s  physical width of target display device.  Set this if you're rendering for\n"
+		   "  -w  physical width of target display device.  Set this if you're rendering for\n"
 		   "      a very large display such as a poster, or a very small one like a phone.\n"
 		   "      Default is %s, which is suitable for a typical laptop screen.\n"
                    "  -t  optional texture image file to use.  If this option is not provided,\n"
@@ -916,7 +916,7 @@ int main(int argc, char **argv) {
   snprintf(usage, sizeof(usage), usagefmt, argv[0], separation_max_default_str, MIN_MAX_SEPARATION_RATIO, separation_min_default_str, MIN_MAX_SEPARATION_RATIO, display_width_default_str);
   usage[sizeof(usage)-1] = '\0';  /* just in case */
 
-  while ((o = getopt(argc, argv, "i:o:f:n:s:t:pNP:c:h")) != -1) {
+  while ((o = getopt(argc, argv, "i:o:f:n:w:t:pNP:c:h")) != -1) {
     switch (o) {
       case 'i':
         heightmap_file = optarg; break;
@@ -933,9 +933,9 @@ int main(int argc, char **argv) {
         }
         separation_min_specified = 1;
         break;
-      case 's':
+      case 'w':
         if (length_from_string(&display_width, optarg) == -1) {
-          print_usage_and_fail(usage, "-s requires a valid positive length specifier");
+          print_usage_and_fail(usage, "-w requires a valid positive length specifier");
         }
         break;
       case 't':
