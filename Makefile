@@ -1,8 +1,8 @@
 CC=gcc
 INC=
-CFLAGS=-O -Wall $(INC) `MagickWand-config --cflags`
-#CFLAGS=-pg $(INC) `MagickWand-config --cflags`
-LIBS=`MagickWand-config  --ldflags --libs` -lm
+CFLAGS=-O -Wall $(INC) `pkg-config --cflags MagickWand`
+#CFLAGS=-pg $(INC) `pkg-config --cflags MagickWand`
+LIBS=`pkg-config --libs MagickWand` -lm
 LFLAGS=
 #LFLAGS=-pg
 
