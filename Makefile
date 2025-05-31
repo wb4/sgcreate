@@ -16,10 +16,10 @@ all: sgcreate
 clean:
 	rm -rf sgcreate *.o
 
-sgcreate: main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o metrics.o
-	$(CC) $(LFLAGS) -o sgcreate main.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o metrics.o $(LIBS)
+sgcreate: sgcreate.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o metrics.o
+	$(CC) $(LFLAGS) -o sgcreate sgcreate.o list.o control_point.o image.o heightmap.o color.o palette.o util.o perlin.o metrics.o $(LIBS)
 
-main.o: main.c util.h control_point.h heightmap.h image.h list.h metrics.h color.h
+sgcreate.o: sgcreate.c util.h control_point.h heightmap.h image.h list.h metrics.h color.h
 
 list.o: list.c control_point.h list.h
 
