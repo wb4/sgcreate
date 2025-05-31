@@ -48,8 +48,8 @@ fn main() {
     let max_distance = distance_for_separation(max_separation, EYE_SEPARATION, face_distance);
 
     println!("Camera FOV: {:.1}°", fov.to_degrees());
-    println!("Min dstance: {:.2}cm", min_distance.to_centimeters());
-    println!("Max dstance: {:.2}cm", max_distance.to_centimeters());
+    println!("Min dstance: {:.2}m", min_distance.to_meters());
+    println!("Max dstance: {:.2}m", max_distance.to_meters());
 }
 
 fn print_usage(app: &str) {
