@@ -458,18 +458,21 @@ static void inner_perlin_color_map(float color[4], float input) {
 
 
 static void outer_perlin_color_map(float color[4], float input) {
-  const float inner_threshold = 0.0;
-  const float outer_threshold = 0.1;
+  const float band_spacing = 0.1;
+  const float band_thickness = 0.03;
 
   memset(color, 0, 4 * sizeof(color[0]));
 
-  if (fabsf(input) > inner_threshold && fabsf(input) < outer_threshold) {
-    color[3] = 1;
-    if (input > 0) {
-      color[0] = 1;
-      color[1] = 1;
-      color[2] = 1;
-    }
+  float int_part;
+  float scaled_input = input / band_spacing;
+
+  float fraction = modff(scaled_input, &int_part);
+  if (fraction < 0) {
+    fraction += 1.0;
+  }
+
+  if (fraction * band_spacing < band_thickness) {
+    color[3] = 1.0;
   }
 }
 
