@@ -109,6 +109,10 @@ length_t length_scale(length_t length, float scale) {
   return result;
 }
 
+float length_div(length_t quotient, length_t divisor) {
+  return quotient.meters / divisor.meters;
+}
+
 int length_cmp(length_t a, length_t b) {
   if (a.meters < b.meters) {
     return -1;

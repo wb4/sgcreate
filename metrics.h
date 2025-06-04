@@ -43,6 +43,7 @@ void length_fmt_centimeters(length_t length, char *dest, size_t dest_len);
 void length_fmt_millimeters(length_t length, char *dest, size_t dest_len);
 
 length_t length_scale(length_t length, float scale);
+float length_div(length_t quotient, length_t divisor);
 
 int length_cmp(length_t a, length_t b);
 

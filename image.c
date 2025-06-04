@@ -578,11 +578,22 @@ static image_t *image_create_random_dots(size_t width, size_t height, linear_den
   if ((draw = NewDrawingWand()) == NULL) goto bad;
   if ((color_wand = NewPixelWand()) == NULL) goto bad;
 
-  length_t dot_width = length_from_millimeters(DOT_WIDTH_MILLIS);
-  float dot_width_pixels = count_per_length(pixel_density, dot_width);
+  length_t physical_width = length_for_count(pixel_density, width);
+  length_t physical_height = length_for_count(pixel_density, height);
+
+  length_t dot_size = length_from_millimeters(DOT_WIDTH_MILLIS);
+
+  float dot_count_x = roundf(length_div(physical_width, dot_size));
+  float dot_count_y = roundf(length_div(physical_height, dot_size));
+
+  length_t dot_physical_width = length_scale(physical_width, 1.0 / dot_count_x);
+  length_t dot_physical_height = length_scale(physical_height, 1.0 / dot_count_y);
+
+  float dot_width_pixels = count_per_length(pixel_density, dot_physical_width);
+  float dot_height_pixels = count_per_length(pixel_density, dot_physical_height);
 
   for (float x = 0;  x < width;  x += dot_width_pixels) {
-    for (float y = 0;  y < height;  y += dot_width_pixels) {
+    for (float y = 0;  y < height;  y += dot_height_pixels) {
       color_t color;
       palette_random_jittered_color(palette, &color);
       char color_str[30];
@@ -590,7 +601,7 @@ static image_t *image_create_random_dots(size_t width, size_t height, linear_den
 
       if (PixelSetColor(color_wand, color_str) == MagickFalse) goto bad;
       DrawSetFillColor(draw, color_wand);
-      DrawRectangle(draw, x, y, x + dot_width_pixels, y + dot_width_pixels);
+      DrawRectangle(draw, x, y, x + dot_width_pixels, y + dot_height_pixels);
     }
   }
 
