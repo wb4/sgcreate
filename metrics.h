@@ -55,5 +55,6 @@ typedef struct {
 linear_density_t linear_density(unsigned count, length_t length);
 
 float count_per_length(linear_density_t linear_density, length_t length);
+length_t length_for_count(linear_density_t linear_density, float count);
 
 #endif

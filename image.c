@@ -19,6 +19,8 @@
 #define OBJECT_RADIUS_MIN_MILLIS (1.336f)
 #define OBJECT_RADIUS_MAX_MILLIS (4.675f)
 
+#define OBJECT_COUNT_PER_LINEAR_CENTIMETER (15.0)
+
 #define PERLIN_INNER_LENGTH_MILLIS (2.0f)
 #define PERLIN_OUTER_LENGTH_MILLIS (8.0f)
 
@@ -392,7 +394,15 @@ static image_t *image_create_random_objects(size_t width, size_t height, linear_
   if ((draw = NewDrawingWand()) == NULL) goto bad;
   if ((pixel = NewPixelWand()) == NULL) goto bad;
 
-  object_count = width * height / 20;
+  length_t physical_width = length_for_count(pixel_density, width);
+  length_t physical_height = length_for_count(pixel_density, height);
+
+  linear_density_t object_linear_density = linear_density(OBJECT_COUNT_PER_LINEAR_CENTIMETER, length_from_centimeters(1.0));
+
+  float object_count_x = count_per_length(object_linear_density, physical_width);
+  float object_count_y = count_per_length(object_linear_density, physical_height);
+
+  object_count = (size_t) (object_count_x * object_count_y);
 
   length_t object_radius_min = length_from_millimeters(OBJECT_RADIUS_MIN_MILLIS);
   length_t object_radius_max = length_from_millimeters(OBJECT_RADIUS_MAX_MILLIS);

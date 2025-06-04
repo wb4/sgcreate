@@ -127,3 +127,7 @@ linear_density_t linear_density(unsigned count, length_t length) {
 float count_per_length(linear_density_t linear_density, length_t length) {
   return length.meters / linear_density.length.meters * linear_density.count;
 }
+
+length_t length_for_count(linear_density_t linear_density, float count) {
+  return length_from_meters(length_meters(linear_density.length) * count / linear_density.count);
+}
