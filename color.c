@@ -49,6 +49,11 @@ color_t color_copy(const color_t *src) {
 }
 
 
+int color_equal(color_t a, color_t b) {
+  return memcmp(&a, &b, sizeof(a)) == 0;
+}
+
+
 unsigned color_r_byte(const color_t *c) {
   return float_to_byte(c->red);
 }
@@ -118,6 +123,16 @@ void color_from_jittered_hsv_color(color_t *dest, color_t source, float hue_radi
   v = jitter_with_cap(s, value_radius, 0, 1);
 
   color_from_hsv(dest, h, s, v);
+}
+
+
+color_t color_lerp(color_t a, color_t b, float t) {
+  color_t result = {
+    lerp_float(a.red, b.red, t),
+    lerp_float(a.green, b.green, t),
+    lerp_float(a.blue, b.blue, t),
+  };
+  return result;
 }
 
 

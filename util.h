@@ -22,9 +22,13 @@ int rand_bool(void);
 float cap_float(float value, float min, float max);
 float wrap_float(float value, float min, float max);
 
+float lerp_float(float a, float b, float t);
+
 float jitter(float value, float max_jitter);
 float jitter_with_cap(float value, float max_jitter, float min, float max);
 float jitter_with_wrap(float value, float max_jitter, float min, float max);
+
+const char *next_token(char *dest, size_t capacity, const char *s, int delim);
 
 #define PERROR(message) fprintf(stderr, "%s(), %s, line %u: %s: %s\n", __FUNCTION__, __FILE__, __LINE__, message, strerror(errno))
 

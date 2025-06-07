@@ -19,6 +19,8 @@ void color_random(color_t *c);
 
 color_t color_copy(const color_t *src);
 
+int color_equal(color_t a, color_t b);
+
 #define color_red(c) (c.red)
 #define color_green(c) (c.green)
 #define color_blue(c) (c.blue)
@@ -37,6 +39,9 @@ void color_set_v(color_t *c, float value);
 
 void color_jitter_hsv(color_t *c, float max_jitter);
 void color_from_jittered_hsv_color(color_t *dest, color_t source, float hue_radius, float saturation_radius, float value_radius);
+
+
+color_t color_lerp(color_t a, color_t b, float t);
 
 
 void color_magick_string(const color_t *c, char *dest, size_t len);

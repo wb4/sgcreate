@@ -62,6 +62,12 @@ float wrap_float(float value, float min, float max) {
 }
 
 
+float lerp_float(float a, float b, float t) {
+  t = cap_float(t, 0.0, 1.0);
+  return a + (b - a) * t;
+}
+
+
 float jitter(float value, float max_jitter) {
   float jitter_fraction = powf(rand_normal(), 2);
   if (rand_bool()) {
@@ -78,4 +84,20 @@ float jitter_with_cap(float value, float max_jitter, float min, float max) {
 
 float jitter_with_wrap(float value, float max_jitter, float min, float max) {
   return wrap_float(jitter(value, max_jitter), min, max);
+}
+
+
+const char *next_token(char *dest, size_t capacity, const char *s, int delim) {
+  char *end = strchrnul(s, delim);
+
+  size_t length = end - s;
+  if (length + 1 > capacity) {
+    errno = ENOSPC;
+    return NULL;
+  }
+
+  memcpy(dest, s, length);
+  dest[length] = '\0';
+
+  return s + length + 1;
 }
