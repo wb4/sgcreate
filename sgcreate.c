@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "color.h"
+#include "color_ramp.h"
 #include "metrics.h"
 #include "list.h"
 #include "image.h"
@@ -112,10 +113,10 @@ int ascii_to_float(const char *ascii, float *result) {
 }
 
 
-image_t *create_texture(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, color_t color) {
+image_t *create_texture(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, const color_ramp_t *color_ramp) {
   image_t *texture;
 
-  if ((texture = image_create_random(width, height, pixel_density, type, color)) == NULL) {
+  if ((texture = image_create_random(width, height, pixel_density, type, color_ramp)) == NULL) {
     perror("image_create_random()");
   }
 
@@ -123,11 +124,11 @@ image_t *create_texture(size_t width, size_t height, linear_density_t pixel_dens
 }
 
 
-image_t *get_texture(const char *filename, size_t width, size_t height, linear_density_t pixel_density, pattern_t type, color_t color) {
+image_t *get_texture(const char *filename, size_t width, size_t height, linear_density_t pixel_density, pattern_t type, const color_ramp_t *color_ramp) {
   image_t *image;
 
   if (filename == NULL) {
-    image = create_texture(width, height, pixel_density, type, color);
+    image = create_texture(width, height, pixel_density, type, color_ramp);
   } else {
     if ((image = image_read(filename)) == NULL) {
       perror("image_read()");
@@ -815,11 +816,17 @@ image_t *create_stereogram(heightmap_t *heightmap, image_t *texture, float eye_s
 }
 
 
-void initialize_generated_texture_color(color_t *color) {
+int initialize_generated_texture_color_ramp(color_ramp_t *ramp) {
+  color_t color;
+
   float hue = rand_normal();
   float saturation = rand_in_range(TEXTURE_COLOR_MIN_SATURATION, TEXTURE_COLOR_MAX_SATURATION);
   float value = rand_in_range(TEXTURE_COLOR_MIN_VALUE, TEXTURE_COLOR_MAX_VALUE);
-  color_from_hsv(color, hue, saturation, value);
+  color_from_hsv(&color, hue, saturation, value);
+
+  color_ramp_init(ramp);
+  color_ramp_point_t point = { 0.0, color };
+  return color_ramp_add_point(ramp, point);
 }
 
 
@@ -861,7 +868,7 @@ int main(int argc, char **argv) {
 
   pattern_t pattern_type = PATTERN_TYPE_RANDOM;
 
-  char color_spec[100] = "";
+  char color_ramp_spec[256] = "";
 
   const char *heightmap_file = NULL;
   const char *output_file = NULL;
@@ -898,12 +905,26 @@ int main(int argc, char **argv) {
                    "  -P  type of texture pattern to generate when the -t option is omitted.\n"
                    "      Valid values are 'perlin', 'polygons', 'ellipses', and 'dots'.  If omitted,\n"
 		   "      then a random pattern type will be selected for you.\n"
-		   "  -c  color of generated texture when the -t option is omitted.\n"
-		   "      E.g. \"blue\", \"#0000ff\", \"rgb(0,0,255)\", \"cmyk(100,100,100,10)\", etc.\n"
-		   "      If empty or omitted, then a random color will be used.\n"
+		   "  -c  color ramp for the generated texture when the -t option is omitted.\n"
+		   "      Format is one of:\n"
+		   "      * <y>:<color>[,...]\n"
+		   "      * <color>\n"
+		   "      The first format specifies a color ramp.  The second specifies a single\n"
+		   "      color for the entire image.\n"
+		   "      <y> is a normalized floating point value between 0 and 1, where 0 is the\n"
+		   "      bottom of the image and 1 is the top.\n"
+		   "      Colors can be specified in several different ways:\n"
+		   "      * \"blue\"\n"
+		   "      * \"#0000ff\"\n"
+		   "      * \"rgb(0,0,255)\"\n"
+		   "      * \"cmyk(100,100,100,10)\"\n"
+		   "      For example, to make a color ramp from green at the bottom, white in the\n"
+		   "      middle, and blue at the top, you could put this:\n"
+		   "        0:green,0.5:white,1:blue\n"
+		   "      If empty or omitted, then a single random color will be used.\n"
                    "  -h  print this usage text and exit.\n";
 
-  char usage[2048];
+  char usage[4096];
 
   int o;
 
@@ -950,7 +971,7 @@ int main(int argc, char **argv) {
         }
         break;
       case 'c':
-	strncpy(color_spec, optarg, sizeof(color_spec));
+	strncpy(color_ramp_spec, optarg, sizeof(color_ramp_spec));
 	break;
       case 'h':
         fputs(usage, stdout);
@@ -1003,13 +1024,16 @@ int main(int argc, char **argv) {
 
   image_init();  /* initialize the image library */
 
-  color_t generated_texture_color;
-  if (color_spec[0]) {
-    if (image_color_from_string(&generated_texture_color, color_spec) == -1) {
-      print_usage_and_fail(usage, "Invalid color string \"%s\" for -c", color_spec);
+  color_ramp_t generated_texture_color_ramp;
+  if (color_ramp_spec[0]) {
+    if (color_ramp_from_string(&generated_texture_color_ramp, color_ramp_spec) == -1) {
+      print_usage_and_fail(usage, "Invalid color ramp string \"%s\" for -c", color_ramp_spec);
     }
   } else {
-    initialize_generated_texture_color(&generated_texture_color);
+    if (initialize_generated_texture_color_ramp(&generated_texture_color_ramp) == -1) {
+      fprintf(stderr, "Internal error: Failed to generate color ramp from single random color: %s\n", strerror(errno));
+      exit(1);
+    }
   }
 
   if ((heightmap = heightmap_read(heightmap_file)) == NULL) {
@@ -1027,7 +1051,7 @@ int main(int argc, char **argv) {
 
   float eye_separation_pixels = count_per_length(pixel_density, eye_separation);
 
-  if ((texture = get_texture(texture_file, (size_t) separation_average_pixels, output_height, pixel_density, pattern_type, generated_texture_color)) == NULL) {
+  if ((texture = get_texture(texture_file, (size_t) separation_average_pixels, output_height, pixel_density, pattern_type, &generated_texture_color_ramp)) == NULL) {
     return 1;
   }
 

@@ -1,7 +1,6 @@
 
 #include "color.h"
 #include "image.h"
-#include "palette.h"
 #include "perlin.h"
 #include "util.h"
 
@@ -24,6 +23,8 @@
 
 #define OBJECT_COUNT_PER_LINEAR_CENTIMETER (15.0)
 
+#define COLOR_JITTER_MAX (0.02f)
+
 #define PERLIN_INNER_LENGTH_MILLIS (2.0f)
 #define PERLIN_OUTER_LENGTH_MILLIS (8.0f)
 
@@ -43,7 +44,7 @@ void image_close(void) {
 }
 
 
-typedef int (*draw_object_t)(DrawingWand *draw, PixelWand *pixel, float x, float y, float min_radius, float max_radius, size_t width, const palette_t *palette);
+typedef int (*draw_object_t)(DrawingWand *draw, PixelWand *pixel, float x, float y, float min_radius, float max_radius, size_t width);
 
 
 image_t *image_create(size_t width, size_t height) {
@@ -263,25 +264,16 @@ size_t image_get_height(const image_t *image) {
 }
 
 
-static int set_fill_color(DrawingWand *draw, PixelWand *pixel, const color_t *color) {
+static int set_fill_color(DrawingWand *draw, PixelWand *pixel, color_t color) {
   char color_string[32];
 
-  color_magick_string(color, color_string, sizeof(color_string));
+  color_magick_string(&color, color_string, sizeof(color_string));
 
   if (PixelSetColor(pixel, color_string) == MagickFalse) return -1;
 
   DrawSetFillColor(draw, pixel);
 
   return 0;
-}
-
-
-static int set_random_fill_color(DrawingWand *draw, PixelWand *pixel, const palette_t *palette) {
-  color_t color;
-
-  palette_random_jittered_color(palette, &color);
-
-  return set_fill_color(draw, pixel, &color);
 }
 
 
@@ -301,10 +293,8 @@ int draw_ellipse(DrawingWand *draw, float x, float y, float rx, float ry) {
 }
 
 
-int draw_random_ellipse(DrawingWand *draw, PixelWand *pixel, float x, float y, float min_radius, float max_radius, size_t width, const palette_t *palette) {
+int draw_random_ellipse(DrawingWand *draw, PixelWand *pixel, float x, float y, float min_radius, float max_radius, size_t width) {
   float rx, ry;
-
-  if (set_random_fill_color(draw, pixel, palette) == -1) return -1;
 
   rx = rand_in_range(min_radius, max_radius);
   ry = rand_in_range(min_radius, max_radius);
@@ -385,7 +375,7 @@ int draw_polygon(DrawingWand *draw, PointInfo *points, size_t point_count, float
 }
 
 
-int draw_random_polygon(DrawingWand *draw, PixelWand *pixel, float x, float y, float min_radius, float max_radius, size_t width, const palette_t *palette) {
+int draw_random_polygon(DrawingWand *draw, PixelWand *pixel, float x, float y, float min_radius, float max_radius, size_t width) {
   size_t point_count;
   size_t i;
   PointInfo points[30];
@@ -403,8 +393,6 @@ int draw_random_polygon(DrawingWand *draw, PixelWand *pixel, float x, float y, f
     points[i].y = y + radius * sinf(angle);
   }
 
-  if (set_random_fill_color(draw, pixel, palette) == -1) return -1;
-
   if (draw_polygon(draw, points, point_count, x, y) == -1) return -1;
 
   if (polygon_falls_left(point_count, points)) {
@@ -420,7 +408,13 @@ int draw_random_polygon(DrawingWand *draw, PixelWand *pixel, float x, float y, f
 }
 
 
-static image_t *image_create_random_objects(size_t width, size_t height, linear_density_t pixel_density, draw_object_t draw_object, const palette_t *palette) {
+color_t ramp_color_for_row(size_t row, size_t height, const color_ramp_t *color_ramp) {
+  float ramp_factor = 1.0 - (float) row / (float) (height - 1);
+  return color_ramp_get(color_ramp, ramp_factor);
+}
+
+
+static image_t *image_create_random_objects(size_t width, size_t height, linear_density_t pixel_density, draw_object_t draw_object, const color_ramp_t *color_ramp) {
   DrawingWand *draw = NULL;
   PixelWand *pixel = NULL;
   size_t object_count;
@@ -459,7 +453,12 @@ static image_t *image_create_random_objects(size_t width, size_t height, linear_
     float x = rand_normal() * width;
     float y = rand_normal() * height;
 
-    if (draw_object(draw, pixel, x, y, object_radius_min_pixels, object_radius_max_pixels, width, palette) == -1) goto bad;
+    color_t color = ramp_color_for_row(y, height, color_ramp);
+    color_jitter_hsv(&color, COLOR_JITTER_MAX);
+
+    if (set_fill_color(draw, pixel, color) == -1) goto bad;
+
+    if (draw_object(draw, pixel, x, y, object_radius_min_pixels, object_radius_max_pixels, width) == -1) goto bad;
   }
 
   if ((image = drawing_wand_to_image(draw, width, height)) == NULL) goto bad;
@@ -572,8 +571,9 @@ static int render_perlin_noise(image_t *image, float perlin_scale, void (*color_
 }
 
 
-void image_fill_with_color(image_t *image, color_t color) {
+void image_fill_with_color_ramp(image_t *image, const color_ramp_t *color_ramp) {
   for (unsigned row = 0;  row < image->height;  row++) {
+    color_t color = ramp_color_for_row(row, image->height, color_ramp);
     for (unsigned col = 0;  col < image->width;  col++) {
       image_set_pixel_color(image, color, col, row);
     }
@@ -581,12 +581,12 @@ void image_fill_with_color(image_t *image, color_t color) {
 }
 
 
-static image_t *image_create_perlin(size_t width, size_t height, linear_density_t pixel_density, color_t color) {
+static image_t *image_create_perlin(size_t width, size_t height, linear_density_t pixel_density, const color_ramp_t *color_ramp) {
   image_t *result = NULL;
   image_t *overlay = NULL;
 
   if ((result = image_create(width, height)) == NULL) goto bad;
-  image_fill_with_color(result, color);
+  image_fill_with_color_ramp(result, color_ramp);
 
   if ((overlay = image_create(width, height)) == NULL) goto bad;
 
@@ -613,7 +613,7 @@ static image_t *image_create_perlin(size_t width, size_t height, linear_density_
 }
 
 
-static image_t *image_create_random_dots(size_t width, size_t height, linear_density_t pixel_density, palette_t *palette) {
+static image_t *image_create_random_dots(size_t width, size_t height, linear_density_t pixel_density, const color_ramp_t *color_ramp) {
   DrawingWand *draw = NULL;
   PixelWand *color_wand = NULL;
 
@@ -628,8 +628,8 @@ static image_t *image_create_random_dots(size_t width, size_t height, linear_den
 
   length_t dot_size = length_from_millimeters(DOT_WIDTH_MILLIS);
 
-  float dot_count_x = roundf(length_div(physical_width, dot_size));
-  float dot_count_y = roundf(length_div(physical_height, dot_size));
+  size_t dot_count_x = roundf(length_div(physical_width, dot_size));
+  size_t dot_count_y = roundf(length_div(physical_height, dot_size));
 
   length_t dot_physical_width = length_scale(physical_width, 1.0 / dot_count_x);
   length_t dot_physical_height = length_scale(physical_height, 1.0 / dot_count_y);
@@ -637,10 +637,14 @@ static image_t *image_create_random_dots(size_t width, size_t height, linear_den
   float dot_width_pixels = count_per_length(pixel_density, dot_physical_width);
   float dot_height_pixels = count_per_length(pixel_density, dot_physical_height);
 
-  for (float x = 0;  x < width;  x += dot_width_pixels) {
-    for (float y = 0;  y < height;  y += dot_height_pixels) {
-      color_t color;
-      palette_random_jittered_color(palette, &color);
+  for (size_t dot_x = 0;  dot_x < dot_count_x;  dot_x++) {
+    float x = dot_x * dot_width_pixels;
+    for (size_t dot_y = 0;  dot_y < dot_count_y;  dot_y++) {
+      float y = dot_y * dot_height_pixels;
+
+      color_t color = ramp_color_for_row(dot_y, dot_count_y, color_ramp);
+      color_scale_value(&color, rand_normal());
+
       char color_str[30];
       color_magick_string(&color, color_str, sizeof(color_str));
 
@@ -667,22 +671,17 @@ static image_t *image_create_random_dots(size_t width, size_t height, linear_den
 }
 
 
-image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, color_t color) {
+image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, const color_ramp_t *color_ramp) {
   if (type == PATTERN_TYPE_RANDOM) {
     type = (pattern_t) ((rand() / (RAND_MAX + 1.0f)) * PATTERN_TYPE_COUNT);
   }
 
   if (type == PATTERN_TYPE_PERLIN) {
-    return image_create_perlin(width, height, pixel_density, color);
-  }
-
-  palette_t palette;
-  if (palette_new_around_color(&palette, color) == -1) {
-    return NULL;
+    return image_create_perlin(width, height, pixel_density, color_ramp);
   }
 
   if (type == PATTERN_TYPE_DOTS) {
-    return image_create_random_dots(width, height, pixel_density, &palette);
+    return image_create_random_dots(width, height, pixel_density, color_ramp);
   }
 
   draw_object_t draw = NULL;
@@ -698,7 +697,7 @@ image_t *image_create_random(size_t width, size_t height, linear_density_t pixel
       return NULL;
   }
 
-  return image_create_random_objects(width, height, pixel_density, draw, &palette);
+  return image_create_random_objects(width, height, pixel_density, draw, color_ramp);
 }
 
 

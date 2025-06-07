@@ -136,6 +136,11 @@ color_t color_lerp(color_t a, color_t b, float t) {
 }
 
 
+void color_scale_value(color_t *color, float scale) {
+  color_set_v(color, color_v(color) * scale);
+}
+
+
 void color_magick_string(const color_t *c, char *dest, size_t len) {
   snprintf(dest, len, "rgba(%u,%u,%u,1)", color_r_byte(c), color_g_byte(c), color_b_byte(c));
 }

@@ -40,6 +40,8 @@ void color_set_v(color_t *c, float value);
 void color_jitter_hsv(color_t *c, float max_jitter);
 void color_from_jittered_hsv_color(color_t *dest, color_t source, float hue_radius, float saturation_radius, float value_radius);
 
+void color_scale_value(color_t *c, float scale);
+
 
 color_t color_lerp(color_t a, color_t b, float t);
 

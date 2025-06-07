@@ -16,7 +16,7 @@ static int color_ramp_point_from_string(color_ramp_point_t *point, const char *s
   char x_str[RAMP_STR_PARTS_BUFFER_SIZE];
   const char *color_str;
 
-  if ((color_str = next_token(x_str, sizeof(x_str), s, ',')) == NULL) return -1;
+  if ((color_str = next_token(x_str, sizeof(x_str), s, ':')) == NULL) return -1;
 
   char *endptr;
   point->x = strtof(x_str, &endptr);
@@ -41,7 +41,7 @@ int color_ramp_from_string(color_ramp_t *ramp, const char *s) {
 
   while (*s) {
     char point_str[RAMP_STR_PARTS_BUFFER_SIZE];
-    if ((s = next_token(point_str, sizeof(point_str), s, ':')) == NULL) return -1;
+    if ((s = next_token(point_str, sizeof(point_str), s, ',')) == NULL) return -1;
     color_ramp_point_t point;
     if (color_ramp_point_from_string(&point, point_str) == -1) return -1;
     if (color_ramp_add_point(ramp, point) == -1) return -1;
