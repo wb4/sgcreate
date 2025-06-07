@@ -19,6 +19,9 @@
 #define OBJECT_RADIUS_MIN_MILLIS (1.336f)
 #define OBJECT_RADIUS_MAX_MILLIS (4.675f)
 
+#define OBJECT_BORDER_WIDTH_MILLIS (0.25)
+#define OBJECT_CONCENTRIC_OUTLINE_COUNT (5)
+
 #define OBJECT_COUNT_PER_LINEAR_CENTIMETER (15.0)
 
 #define PERLIN_INNER_LENGTH_MILLIS (2.0f)
@@ -282,11 +285,19 @@ static int set_random_fill_color(DrawingWand *draw, PixelWand *pixel, const pale
 }
 
 
-static void set_random_opacity(DrawingWand *draw, float min, float max) {
-  float opacity;
+int draw_ellipse(DrawingWand *draw, float x, float y, float rx, float ry) {
+  DrawSetFillOpacity(draw, 1.0);
 
-  opacity = min + (max - min) * rand() / (RAND_MAX + 1.0f);
-  DrawSetFillOpacity(draw, opacity);
+  DrawEllipse(draw, x, y, rx, ry, 0.0, 360.0);
+
+  DrawSetFillOpacity(draw, 0.0);
+
+  for (size_t i = 1;  i < OBJECT_CONCENTRIC_OUTLINE_COUNT;  ++i) {
+    float scale = (float) i / (float) OBJECT_CONCENTRIC_OUTLINE_COUNT;
+    DrawEllipse(draw, x, y, rx * scale, ry * scale, 0.0, 360.0);
+  }
+
+  return 0;
 }
 
 
@@ -294,18 +305,17 @@ int draw_random_ellipse(DrawingWand *draw, PixelWand *pixel, float x, float y, f
   float rx, ry;
 
   if (set_random_fill_color(draw, pixel, palette) == -1) return -1;
-  set_random_opacity(draw, OPACITY_MIN, OPACITY_MAX);
 
   rx = rand_in_range(min_radius, max_radius);
   ry = rand_in_range(min_radius, max_radius);
 
-  DrawEllipse(draw, x, y, rx, ry, 0.0, 360.0);
+  if (draw_ellipse(draw, x, y, rx, ry) == -1) return -1;
 
   if (x - rx < 0.0) {
-    DrawEllipse(draw, x + (float) width, y, rx, ry, 0.0, 360.0);
+    if (draw_ellipse(draw, x + (float) width, y, rx, ry) == -1) return -1;
   }
   if (x + rx >= width) {
-    DrawEllipse(draw, x - (float) width, y, rx, ry, 0.0, 360.0);
+    if (draw_ellipse(draw, x - (float) width, y, rx, ry) == -1) return -1;
   }
 
   return 0;
@@ -348,35 +358,62 @@ void shift_polygon(PointInfo *dest, size_t count, const PointInfo *src, int offs
 }
 
 
+void scale_polygon(PointInfo *dest, size_t count, const PointInfo *src, float x, float y, float scale) {
+  for (size_t i = 0;  i < count;  ++i) {
+    dest[i].x = x + scale * (src[i].x - x);
+    dest[i].y = y + scale * (src[i].y - y);
+  }
+}
+
+
+int draw_polygon(DrawingWand *draw, PointInfo *points, size_t point_count, float x, float y) {
+  PointInfo temp_points[30];
+
+  DrawSetFillOpacity(draw, 1.0);
+
+  DrawPolygon(draw, point_count, points);
+
+  DrawSetFillOpacity(draw, 0.0);
+
+  for (size_t i = 1;  i < OBJECT_CONCENTRIC_OUTLINE_COUNT;  ++i) {
+    float scale = (float) i / (float) OBJECT_CONCENTRIC_OUTLINE_COUNT;
+    scale_polygon(temp_points, point_count, points, x, y, scale);
+    DrawPolygon(draw, point_count, temp_points);
+  }
+
+  return 0;
+}
+
+
 int draw_random_polygon(DrawingWand *draw, PixelWand *pixel, float x, float y, float min_radius, float max_radius, size_t width, const palette_t *palette) {
   size_t point_count;
   size_t i;
   PointInfo points[30];
   PointInfo temp_points[30];
-  float angle;
   float radius;
-
-  if (set_random_fill_color(draw, pixel, palette) == -1) return -1;
-  set_random_opacity(draw, OPACITY_MIN, OPACITY_MAX);
 
   point_count = (size_t) rand_in_range_int(3, 8);
 
+  float angle_offset = rand_normal() * 2.0f * M_PI;
+
   for (i = 0;  i < point_count;  ++i) {
-    angle = rand_normal() * 2.0f * M_PI;
+    float angle = angle_offset + ((float) i / (float) point_count) * 2.0f * M_PI;
     radius = rand_in_range(min_radius, max_radius);
     points[i].x = x + radius * cosf(angle);
     points[i].y = y + radius * sinf(angle);
   }
 
-  DrawPolygon(draw, point_count, points);
+  if (set_random_fill_color(draw, pixel, palette) == -1) return -1;
+
+  if (draw_polygon(draw, points, point_count, x, y) == -1) return -1;
 
   if (polygon_falls_left(point_count, points)) {
     shift_polygon(temp_points, point_count, points, (int) width);
-    DrawPolygon(draw, point_count, temp_points);
+    if (draw_polygon(draw, temp_points, point_count, x + width, y) == -1) return -1;
   }
   if (polygon_falls_right(point_count, points, width)) {
     shift_polygon(temp_points, point_count, points, -((int) width));
-    DrawPolygon(draw, point_count, temp_points);
+    if (draw_polygon(draw, temp_points, point_count, x - width, y) == -1) return -1;
   }
 
   return 0;
@@ -409,6 +446,14 @@ static image_t *image_create_random_objects(size_t width, size_t height, linear_
 
   float object_radius_min_pixels = count_per_length(pixel_density, object_radius_min);
   float object_radius_max_pixels = count_per_length(pixel_density, object_radius_max);
+
+  length_t object_border_width = length_from_millimeters(OBJECT_BORDER_WIDTH_MILLIS);
+
+  float object_border_width_pixels = count_per_length(pixel_density, object_border_width);
+
+  if (PixelSetColor(pixel, "black") == MagickFalse) goto bad;
+  DrawSetStrokeColor(draw, pixel);
+  DrawSetStrokeWidth(draw, object_border_width_pixels);
 
   for (size_t i = 0;  i < object_count;  ++i) {
     float x = rand_normal() * width;
