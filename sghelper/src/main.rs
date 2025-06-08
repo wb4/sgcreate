@@ -43,7 +43,7 @@ fn main() {
     let min_separation = params[3];
     let max_separation = params[4];
 
-    let fov = 2.0 * (image_width.min(image_height) / (2.0 * face_distance)).atan();
+    let fov = 2.0 * (image_width.max(image_height) / (2.0 * face_distance)).atan();
     let min_distance = distance_for_separation(min_separation, EYE_SEPARATION, face_distance);
     let max_distance = distance_for_separation(max_separation, EYE_SEPARATION, face_distance);
 
@@ -117,16 +117,12 @@ impl Length {
         Ok(Length::from_meters(scalar * conversion_factor))
     }
 
-    fn min(self, other: Self) -> Self {
-        Length::from_meters(self.to_meters().min(other.to_meters()))
+    fn max(self, other: Self) -> Self {
+        Length::from_meters(self.to_meters().max(other.to_meters()))
     }
 
     fn to_meters(self) -> f32 {
         self.meters
-    }
-
-    fn to_centimeters(self) -> f32 {
-        self.meters / METERS_PER_CENTIMETER
     }
 }
 
