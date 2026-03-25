@@ -28,10 +28,8 @@
 
 #define EYE_SEPARATION_DEFAULT_MILLIS (62.0f)
 
-#define MIN_MAX_SEPARATION_RATIO (0.65f)
-
-#define SEPARATION_MAX_DEFAULT_MILLIS (0.6f * EYE_SEPARATION_DEFAULT_MILLIS)
-#define SEPARATION_MIN_DEFAULT_MILLIS ((float) (MIN_MAX_SEPARATION_RATIO * SEPARATION_MAX_DEFAULT_MILLIS))
+#define SEPARATION_MAX_DEFAULT_MILLIS (50.0f)
+#define SEPARATION_MIN_DEFAULT_MILLIS (28.0f)
 
 #define DISPLAY_WIDTH_DEFAULT_INCHES (14.0f)
 
@@ -860,6 +858,7 @@ int main(int argc, char **argv) {
 
   ssize_t edge_echo_offset;
 
+  int separation_max_specified = 0;
   int separation_min_specified = 0;
 
   int preserve_height = 0;
@@ -889,10 +888,7 @@ int main(int argc, char **argv) {
                    "Options:\n"
                    "\n"
                    "  -f  maximum separation.  Default %s\n"
-                   "      If -f is specified but -n (see below) is not, then -n defaults\n"
-                   "      to %g * -f\n"
-                   "  -n  minimum separation.  Default %s, or %g * -f\n"
-                   "      if -f is specified and -n is not.\n"
+                   "  -n  minimum separation.  Default %s\n"
 		   "  -w  physical width of target display device.  Set this if you're rendering for\n"
 		   "      a very large display such as a poster, or a very small one like a phone.\n"
 		   "      Default is %s, which is suitable for a typical laptop screen.\n"
@@ -934,7 +930,7 @@ int main(int argc, char **argv) {
   length_fmt_millimeters(separation_min, separation_min_default_str, sizeof(separation_min_default_str));
   char display_width_default_str[50];
   length_fmt_centimeters(display_width, display_width_default_str, sizeof(display_width_default_str));
-  snprintf(usage, sizeof(usage), usagefmt, argv[0], separation_max_default_str, MIN_MAX_SEPARATION_RATIO, separation_min_default_str, MIN_MAX_SEPARATION_RATIO, display_width_default_str);
+  snprintf(usage, sizeof(usage), usagefmt, argv[0], separation_max_default_str, separation_min_default_str, display_width_default_str);
   usage[sizeof(usage)-1] = '\0';  /* just in case */
 
   while ((o = getopt(argc, argv, "i:o:f:n:w:t:pNP:c:h")) != -1) {
@@ -947,6 +943,7 @@ int main(int argc, char **argv) {
         if (length_from_string(&separation_max, optarg) == -1) {
           print_usage_and_fail(usage, "-f requires a valid positive length specifier");
         }
+        separation_max_specified = 1;
         break;
       case 'n':
         if (length_from_string(&separation_min, optarg) == -1) {
@@ -1008,11 +1005,17 @@ int main(int argc, char **argv) {
   if (length_meters(separation_max) <= 0.0f) {
     print_usage_and_fail(usage, "-f requires a valid positive length specifier");
   }
-  if (!separation_min_specified) {
-    separation_min = length_scale(separation_max, MIN_MAX_SEPARATION_RATIO);
+  if (length_meters(separation_min) <= 0.0f) {
+    print_usage_and_fail(usage, "-n requires a valid positive length specifier");
   }
-  if (length_meters(separation_min) <= 0.0f || length_cmp(separation_min, separation_max) >= 0) {
-    print_usage_and_fail(usage, "-n requires a positive argument less than maximum separation (%f)", separation_max);
+  if (length_cmp(separation_min, separation_max) >= 0) {
+    if (separation_max_specified && separation_min_specified) {
+      print_usage_and_fail(usage, "-f must be greater than -n");
+    } else if (separation_max_specified) {
+      print_usage_and_fail(usage, "-f must be greater than minimum separation (%s)", separation_min_default_str);
+    } else {
+      print_usage_and_fail(usage, "-n must be less than maximum separation (%s)", separation_max_default_str);
+    }
   }
   if (length_cmp(separation_max, eye_separation) >= 0) {
     char buff[50];
