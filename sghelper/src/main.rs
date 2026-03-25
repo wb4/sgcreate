@@ -45,7 +45,9 @@ fn main() {
 
     let fov = 2.0 * (image_width.max(image_height) / (2.0 * face_distance)).atan();
     let min_distance = distance_for_separation(min_separation, EYE_SEPARATION, face_distance);
-    let max_distance = distance_for_separation(max_separation, EYE_SEPARATION, face_distance);
+    let max_distance = (min_distance
+        + distance_for_separation(max_separation, EYE_SEPARATION, face_distance))
+        / 2.0;
 
     println!("Camera FOV: {:.1}°", fov.to_degrees());
     println!("Min dstance: {:.2}m", min_distance.to_meters());
@@ -147,5 +149,21 @@ impl ops::Div<Self> for Length {
 
     fn div(self, rhs: Self) -> f32 {
         self.meters / rhs.meters
+    }
+}
+
+impl ops::Div<f32> for Length {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self {
+        Length::from_meters(self.to_meters() / rhs)
+    }
+}
+
+impl ops::Add<Self> for Length {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Length::from_meters(self.to_meters() + rhs.to_meters())
     }
 }
