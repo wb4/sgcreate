@@ -16,18 +16,6 @@
 #include "util.h"
 
 
-/* My eye separation is about 280 pixels for my display.
-   Let's use these values for our default settings.
-   A good maximum stereo separation in the image is half the eye separation.
-   That puts the image at the same distance as the viewer's reflection.
-   280 / 2 is 140
-
-   We don't want the minimum separation to be half of the max.  That could cause
-   misconvergence for the viewer.  Let's try 0.65
-*/
-
-#define EYE_SEPARATION_DEFAULT_MILLIS (62.0f)
-
 #define SEPARATION_MAX_DEFAULT_MILLIS (50.0f)
 #define SEPARATION_MIN_DEFAULT_MILLIS (28.0f)
 
@@ -148,7 +136,7 @@ int scale_texture_height(image_t *texture, float width) {
 }
 
 
-int get_separation(float *separation, const heightmap_t *heightmap, size_t row, float x, float eye_sep, float sep_min, float sep_max) {
+int get_separation(float *separation, const heightmap_t *heightmap, size_t row, float x, float sep_min, float sep_max) {
   float h = heightmap_get(heightmap, x, row);
 
   float dof = 2.0 * (sep_max - sep_min) / (2.0 * sep_max - sep_min);
@@ -397,13 +385,13 @@ int generate_both_eyes_can_see_control_points(list_t *points, float *greatest_ot
 }
 
 
-int generate_h_place_control_points(list_t *points, size_t row, heightmap_t *heightmap, float eye_separation, float separation_min, float separation_max, float h_place, float *greatest_other_x, node_t **start, int *last_invalid) {
+int generate_h_place_control_points(list_t *points, size_t row, heightmap_t *heightmap, float separation_min, float separation_max, float h_place, float *greatest_other_x, node_t **start, int *last_invalid) {
   control_point_t point;
   float sep;
   float half_sep;
   float center;
 
-  if (get_separation(&sep, heightmap, row, h_place, eye_separation, separation_min, separation_max) == -1) {
+  if (get_separation(&sep, heightmap, row, h_place, separation_min, separation_max) == -1) {
     return -1;
   }
 
@@ -465,7 +453,7 @@ int generate_h_place_control_points(list_t *points, size_t row, heightmap_t *hei
 }
 
 
-int generate_right_half_control_points(list_t *points, size_t row, heightmap_t *heightmap, float eye_separation, float separation_min, float separation_max) {
+int generate_right_half_control_points(list_t *points, size_t row, heightmap_t *heightmap, float separation_min, float separation_max) {
   float width;  /* width of the heightmap */
   float h_place;  /* current horizontal position in this row of the heightmap */
   float greatest_other_x;  /* right-most left x-position that has been linked to.  This is used to determine eye visibility. */
@@ -484,7 +472,7 @@ int generate_right_half_control_points(list_t *points, size_t row, heightmap_t *
   /* We initialize h_place one pixel to the right of the midpoint because the calling code has already generated
      the initial two control points from the midpoint. */
   for (h_place = 0.5f * width + 1.0f;  h_place < width;  h_place += 1.0f) {
-    if (generate_h_place_control_points(points, row, heightmap, eye_separation, separation_min, separation_max, h_place, &greatest_other_x, &start, &last_invalid) == -1) {
+    if (generate_h_place_control_points(points, row, heightmap, separation_min, separation_max, h_place, &greatest_other_x, &start, &last_invalid) == -1) {
       return -1;
     }
   }
@@ -493,7 +481,7 @@ int generate_right_half_control_points(list_t *points, size_t row, heightmap_t *
 }
 
 
-int generate_middle_control_points(list_t *points, size_t row, heightmap_t *heightmap, float eye_separation, float separation_min, float separation_max, float width) {
+int generate_middle_control_points(list_t *points, size_t row, heightmap_t *heightmap, float separation_min, float separation_max, float width) {
   float h_place;
 
   control_point_t point;
@@ -504,7 +492,7 @@ int generate_middle_control_points(list_t *points, size_t row, heightmap_t *heig
 
   /* Make the initial two control points in the middle. */
   h_place = 0.5f * width;
-  if (get_separation(&sep, heightmap, row, h_place, eye_separation, separation_min, separation_max) == -1) {
+  if (get_separation(&sep, heightmap, row, h_place, separation_min, separation_max) == -1) {
     return -1;
   }
 
@@ -532,7 +520,7 @@ int generate_middle_control_points(list_t *points, size_t row, heightmap_t *heig
 }
 
 
-int generate_control_points(list_t *points, size_t row, heightmap_t *heightmap, float eye_separation, float separation_min, float separation_max) {
+int generate_control_points(list_t *points, size_t row, heightmap_t *heightmap, float separation_min, float separation_max) {
   float width;
 
 
@@ -542,12 +530,12 @@ int generate_control_points(list_t *points, size_t row, heightmap_t *heightmap, 
   heightmap_set_reflected(heightmap, 1);
 
   /* Make the initial two control points. */
-  if (generate_middle_control_points(points, row, heightmap, eye_separation, separation_min, separation_max, width) == -1) {
+  if (generate_middle_control_points(points, row, heightmap, separation_min, separation_max, width) == -1) {
     return -1;
   }
 
   /* Go from the center to the left side of the screen. */
-  if (generate_right_half_control_points(points, row, heightmap, eye_separation, separation_min, separation_max) == -1) {
+  if (generate_right_half_control_points(points, row, heightmap, separation_min, separation_max) == -1) {
     return -1;
   }
 
@@ -556,7 +544,7 @@ int generate_control_points(list_t *points, size_t row, heightmap_t *heightmap, 
   list_reflect(points, 0.5f * width);
 
   /* Go from the center to the right side of the screen. */
-  if (generate_right_half_control_points(points, row, heightmap, eye_separation, separation_min, separation_max) == -1) {
+  if (generate_right_half_control_points(points, row, heightmap, separation_min, separation_max) == -1) {
     return -1;
   }
 
@@ -759,7 +747,7 @@ int color_row(image_t *sg, size_t row, image_t *texture, list_t *points, ssize_t
 }
 
 
-int generate_row(image_t *sg, size_t row, heightmap_t *heightmap, image_t *texture, float eye_separation, float separation_min, float separation_max, ssize_t edge_echo_offset) {
+int generate_row(image_t *sg, size_t row, heightmap_t *heightmap, image_t *texture, float separation_min, float separation_max, ssize_t edge_echo_offset) {
   int retval = 0;
   list_t points;
 
@@ -768,7 +756,7 @@ int generate_row(image_t *sg, size_t row, heightmap_t *heightmap, image_t *textu
     return -1;
   }
 
-  if (generate_control_points(&points, row, heightmap, eye_separation, separation_min, separation_max) == -1) goto bad;
+  if (generate_control_points(&points, row, heightmap, separation_min, separation_max) == -1) goto bad;
 
   /* All right.  Now that we have all the control points for this row,
      it's time to color the pixels. */
@@ -785,7 +773,7 @@ int generate_row(image_t *sg, size_t row, heightmap_t *heightmap, image_t *textu
 }
 
 
-image_t *create_stereogram(heightmap_t *heightmap, image_t *texture, float eye_separation, float separation_min, float separation_max, ssize_t edge_echo_offset) {
+image_t *create_stereogram(heightmap_t *heightmap, image_t *texture, float separation_min, float separation_max, ssize_t edge_echo_offset) {
   image_t *sg;
 
   unsigned long width;
@@ -800,7 +788,7 @@ image_t *create_stereogram(heightmap_t *heightmap, image_t *texture, float eye_s
   }
 
   for (size_t row = 0;  row < height;  row++) {
-    if (generate_row(sg, row, heightmap, texture, eye_separation, separation_min, separation_max, edge_echo_offset) == -1 ) {
+    if (generate_row(sg, row, heightmap, texture, separation_min, separation_max, edge_echo_offset) == -1 ) {
       image_destroy(sg);
       return NULL;
     }
@@ -844,8 +832,6 @@ int main(int argc, char **argv) {
   heightmap_t *heightmap;
   image_t *texture;
   image_t *output;
-
-  length_t eye_separation = length_from_millimeters(EYE_SEPARATION_DEFAULT_MILLIS);
 
   length_t separation_max = length_from_millimeters(SEPARATION_MAX_DEFAULT_MILLIS);
   length_t separation_min = length_from_millimeters(SEPARATION_MIN_DEFAULT_MILLIS);
@@ -1013,11 +999,6 @@ int main(int argc, char **argv) {
       print_usage_and_fail(usage, "-n must be less than maximum separation (%s)", separation_max_default_str);
     }
   }
-  if (length_cmp(separation_max, eye_separation) >= 0) {
-    char buff[50];
-    length_fmt_millimeters(eye_separation, buff, sizeof(buff));
-    print_usage_and_fail(usage, "maximum separation must be less than average pupil separation of %s", buff);
-  }
 
   srand(time(NULL));
 
@@ -1048,8 +1029,6 @@ int main(int argc, char **argv) {
   float separation_max_pixels = count_per_length(pixel_density, separation_max);
   float separation_average_pixels = 0.5f * (separation_min_pixels + separation_max_pixels);
 
-  float eye_separation_pixels = count_per_length(pixel_density, eye_separation);
-
   if ((texture = get_texture(texture_file, (size_t) separation_average_pixels, output_height, pixel_density, pattern_type, &generated_texture_color_ramp)) == NULL) {
     return 1;
   }
@@ -1073,7 +1052,7 @@ int main(int argc, char **argv) {
 
   edge_echo_offset = (ssize_t) (EDGE_ECHO_OFFSET_RATIO * separation_max_pixels);
 
-  if ((output = create_stereogram(heightmap, texture, eye_separation_pixels, separation_min_pixels, separation_max_pixels, edge_echo_offset)) == NULL) {
+  if ((output = create_stereogram(heightmap, texture, separation_min_pixels, separation_max_pixels, edge_echo_offset)) == NULL) {
     return -1;
   }
 
