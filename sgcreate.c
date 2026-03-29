@@ -149,14 +149,10 @@ int scale_texture_height(image_t *texture, float width) {
 
 
 int get_separation(float *separation, const heightmap_t *heightmap, size_t row, float x, float eye_sep, float sep_min, float sep_max) {
-  float c;
-  float d;
+  float h = heightmap_get(heightmap, x, row);
 
-  c = heightmap_get(heightmap, x, row);
-
-  d = (c * sep_min) / (eye_sep - sep_min) + ((1.0f-c) * sep_max) / (eye_sep - sep_max);
-
-  *separation = (d * eye_sep) / (d + 1.0f);
+  float dof = 2.0 * (sep_max - sep_min) / (2.0 * sep_max - sep_min);
+  *separation = (1.0 - dof * h) * 2.0 * sep_max / (2.0 - dof * h);
 
   return 0;
 }
