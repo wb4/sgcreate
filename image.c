@@ -6,8 +6,8 @@
 
 #include <errno.h>
 #include <math.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <wand/MagickWand.h>
 
@@ -30,7 +30,7 @@
 
 #define DOT_WIDTH_MILLIS (0.67f)
 
-#define PERLIN_INNER_OPACITY (0.6f)
+#define PERLIN_INNER_OPACITY (0.8f)
 #define PERLIN_OUTER_OPACITY (0.8f)
 
 
@@ -408,13 +408,13 @@ int draw_random_polygon(DrawingWand *draw, PixelWand *pixel, float x, float y, f
 }
 
 
-color_t ramp_color_for_row(size_t row, size_t height, const color_ramp_t *color_ramp) {
+static color_t ramp_color_for_row(size_t row, size_t height, const color_ramp_t *color_ramp) {
   float ramp_factor = 1.0 - (float) row / (float) (height - 1);
   return color_ramp_get(color_ramp, ramp_factor);
 }
 
 
-static image_t *image_create_random_objects(size_t width, size_t height, linear_density_t pixel_density, draw_object_t draw_object, const color_ramp_t *color_ramp) {
+static image_t *image_create_random_objects(size_t width, size_t height, linear_density_t pixel_density, draw_object_t draw_object) {
   DrawingWand *draw = NULL;
   PixelWand *pixel = NULL;
   size_t object_count;
@@ -453,7 +453,8 @@ static image_t *image_create_random_objects(size_t width, size_t height, linear_
     float x = rand_normal() * width;
     float y = rand_normal() * height;
 
-    color_t color = ramp_color_for_row(y, height, color_ramp);
+    color_t color;
+    color_from_hsv(&color, 0.5, 0.5, 0.5);
     color_jitter_hsv(&color, COLOR_JITTER_MAX);
 
     if (set_fill_color(draw, pixel, color) == -1) goto bad;
@@ -500,7 +501,6 @@ static void inner_perlin_color_map(float color[4], float input) {
   memset(color, 0, 4 * sizeof(color[0]));
 
   if (input > -threshold && input < threshold) {
-    //color[3] = 1.0 - (input * input / threshold);
     color[3] = 1;
     if (input > 0) {
       color[0] = 1;
@@ -571,22 +571,11 @@ static int render_perlin_noise(image_t *image, float perlin_scale, void (*color_
 }
 
 
-void image_fill_with_color_ramp(image_t *image, const color_ramp_t *color_ramp) {
-  for (unsigned row = 0;  row < image->height;  row++) {
-    color_t color = ramp_color_for_row(row, image->height, color_ramp);
-    for (unsigned col = 0;  col < image->width;  col++) {
-      image_set_pixel_color(image, color, col, row);
-    }
-  }
-}
-
-
-static image_t *image_create_perlin(size_t width, size_t height, linear_density_t pixel_density, const color_ramp_t *color_ramp) {
+static image_t *image_create_perlin(size_t width, size_t height, linear_density_t pixel_density) {
   image_t *result = NULL;
   image_t *overlay = NULL;
 
   if ((result = image_create(width, height)) == NULL) goto bad;
-  image_fill_with_color_ramp(result, color_ramp);
 
   if ((overlay = image_create(width, height)) == NULL) goto bad;
 
@@ -613,7 +602,7 @@ static image_t *image_create_perlin(size_t width, size_t height, linear_density_
 }
 
 
-static image_t *image_create_random_dots(size_t width, size_t height, linear_density_t pixel_density, const color_ramp_t *color_ramp) {
+static image_t *image_create_random_dots(size_t width, size_t height, linear_density_t pixel_density) {
   DrawingWand *draw = NULL;
   PixelWand *color_wand = NULL;
 
@@ -642,7 +631,8 @@ static image_t *image_create_random_dots(size_t width, size_t height, linear_den
     for (size_t dot_y = 0;  dot_y < dot_count_y;  dot_y++) {
       float y = dot_y * dot_height_pixels;
 
-      color_t color = ramp_color_for_row(dot_y, dot_count_y, color_ramp);
+      color_t color;
+      color_from_hsv(&color, 0.5, 0.5, 0.5);
       color_scale_value(&color, rand_normal());
 
       char color_str[30];
@@ -671,17 +661,13 @@ static image_t *image_create_random_dots(size_t width, size_t height, linear_den
 }
 
 
-image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, const color_ramp_t *color_ramp) {
-  if (type == PATTERN_TYPE_RANDOM) {
-    type = (pattern_t) ((rand() / (RAND_MAX + 1.0f)) * PATTERN_TYPE_COUNT);
-  }
-
+image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type) {
   if (type == PATTERN_TYPE_PERLIN) {
-    return image_create_perlin(width, height, pixel_density, color_ramp);
+    return image_create_perlin(width, height, pixel_density);
   }
 
   if (type == PATTERN_TYPE_DOTS) {
-    return image_create_random_dots(width, height, pixel_density, color_ramp);
+    return image_create_random_dots(width, height, pixel_density);
   }
 
   draw_object_t draw = NULL;
@@ -697,7 +683,7 @@ image_t *image_create_random(size_t width, size_t height, linear_density_t pixel
       return NULL;
   }
 
-  return image_create_random_objects(width, height, pixel_density, draw, color_ramp);
+  return image_create_random_objects(width, height, pixel_density, draw);
 }
 
 
@@ -769,10 +755,43 @@ void image_blend_overlay(image_t *dest, image_t *overlay, float overlay_opacity)
       image_get_pixel(overlay, overlay_pixel, col, row);
       float overlay_alpha = overlay_pixel[3] * overlay_opacity;
       float dest_alpha = 1.0 - overlay_alpha;
-      for (int i = 0;  i < 3;  i++) {
+      for (int i = 0;  i < 4;  i++) {
 	dest_pixel[i] = (dest_alpha * dest_pixel[i]) + (overlay_alpha * overlay_pixel[i]);
       }
       image_set_pixel(dest, dest_pixel, col, row);
+    }
+  }
+}
+
+
+void image_apply_color_ramp(image_t *image, const color_ramp_t *color_ramp, blend_method_t blend_method) {
+  for (size_t row = 0;  row < image->height;  row++) {
+    color_t color = ramp_color_for_row(row, image->height, color_ramp);
+    for (size_t col = 0;  col < image->width;  col++) {
+      float pixel[4];
+      image_get_pixel(image, pixel, col, row);
+      switch (blend_method) {
+        case BLEND_METHOD_ALPHA:
+	  float pixel_alpha = pixel[3];
+	  float color_alpha = 1.0 - pixel_alpha;
+	  pixel[0] = pixel_alpha * pixel[0] + color_alpha * color.red;
+	  pixel[1] = pixel_alpha * pixel[1] + color_alpha * color.green;
+	  pixel[2] = pixel_alpha * pixel[2] + color_alpha * color.blue;
+	  pixel[3] = 1.0;
+	  break;
+        case BLEND_METHOD_OFFSET:
+	  color_t pixel_color;
+	  color_from_rgb(&pixel_color, pixel[0], pixel[1], pixel[2]);
+	  float hue = wrap_float(color_h(&pixel_color) - 0.5 + color_h(&color), 0.0, 1.0);
+	  float sat = cap_float(color_s(&pixel_color) - 0.5 + color_s(&color), 0.0, 1.0);
+	  float val = cap_float(color_v(&pixel_color) - 0.5 + color_v(&color), 0.0, 1.0);
+	  color_from_hsv(&pixel_color, hue, sat, val);
+	  pixel[0] = pixel_color.red;
+	  pixel[1] = pixel_color.green;
+	  pixel[2] = pixel_color.blue;
+	  break;
+      }
+      image_set_pixel(image, pixel, col, row);
     }
   }
 }

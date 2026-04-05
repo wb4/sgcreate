@@ -99,10 +99,10 @@ int ascii_to_float(const char *ascii, float *result) {
 }
 
 
-image_t *create_texture(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, const color_ramp_t *color_ramp) {
+image_t *create_texture(size_t width, size_t height, linear_density_t pixel_density, pattern_t type) {
   image_t *texture;
 
-  if ((texture = image_create_random(width, height, pixel_density, type, color_ramp)) == NULL) {
+  if ((texture = image_create_random(width, height, pixel_density, type)) == NULL) {
     perror("image_create_random()");
   }
 
@@ -110,11 +110,11 @@ image_t *create_texture(size_t width, size_t height, linear_density_t pixel_dens
 }
 
 
-image_t *get_texture(const char *filename, size_t width, size_t height, linear_density_t pixel_density, pattern_t type, const color_ramp_t *color_ramp) {
+image_t *get_texture(const char *filename, size_t width, size_t height, linear_density_t pixel_density, pattern_t type) {
   image_t *image;
 
   if (filename == NULL) {
-    image = create_texture(width, height, pixel_density, type, color_ramp);
+    image = create_texture(width, height, pixel_density, type);
   } else {
     if ((image = image_read(filename)) == NULL) {
       perror("image_read()");
@@ -812,6 +812,12 @@ int initialize_generated_texture_color_ramp(color_ramp_t *ramp) {
 }
 
 
+void apply_color_ramp_for_pattern_type(image_t *image, const color_ramp_t *color_ramp, pattern_t pattern_type) {
+  blend_method_t blend_method = pattern_type == PATTERN_TYPE_PERLIN ? BLEND_METHOD_ALPHA : BLEND_METHOD_OFFSET;
+  image_apply_color_ramp(image, color_ramp, blend_method);
+}
+
+
 void print_usage_and_fail(const char *usage, const char *fmt, ...) {
   va_list ap;
 
@@ -1029,7 +1035,11 @@ int main(int argc, char **argv) {
   float separation_max_pixels = count_per_length(pixel_density, separation_max);
   float separation_average_pixels = 0.5f * (separation_min_pixels + separation_max_pixels);
 
-  if ((texture = get_texture(texture_file, (size_t) separation_average_pixels, output_height, pixel_density, pattern_type, &generated_texture_color_ramp)) == NULL) {
+  if (pattern_type == PATTERN_TYPE_RANDOM) {
+    pattern_type = (pattern_t) ((rand() / (RAND_MAX + 1.0f)) * PATTERN_TYPE_COUNT);
+  }
+
+  if ((texture = get_texture(texture_file, (size_t) separation_average_pixels, output_height, pixel_density, pattern_type)) == NULL) {
     return 1;
   }
 
@@ -1054,6 +1064,12 @@ int main(int argc, char **argv) {
 
   if ((output = create_stereogram(heightmap, texture, separation_min_pixels, separation_max_pixels, edge_echo_offset)) == NULL) {
     return -1;
+  }
+
+  if (texture_file == NULL) {
+    /* The texture was generated from a pattern.
+       We need to apply the color ramp to it. */
+    apply_color_ramp_for_pattern_type(output, &generated_texture_color_ramp, pattern_type);
   }
 
   if (image_write(output, output_file) == -1) {

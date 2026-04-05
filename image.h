@@ -27,6 +27,12 @@ typedef enum {
 } pattern_t;
 
 
+typedef enum {
+  BLEND_METHOD_ALPHA,
+  BLEND_METHOD_OFFSET,
+} blend_method_t;
+
+
 void image_init(void);  /* initialize the image library */
 void image_close(void);  /* close the image library */
 
@@ -46,15 +52,15 @@ void image_set_pixel_color(image_t *image, color_t color, size_t x, size_t y);
 size_t image_get_width(const image_t *image);
 size_t image_get_height(const image_t *image);
 
-image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type, const color_ramp_t *color_ramp);
-
-void image_fill_with_color_ramp(image_t *image, const color_ramp_t *color_ramp);
+image_t *image_create_random(size_t width, size_t height, linear_density_t pixel_density, pattern_t type);
 
 int image_add_noise(image_t *image);
 
 int image_scale(image_t *image, size_t width, size_t height);
 
 void image_blend_overlay(image_t *dest, image_t *overlay, float overlay_opacity);
+
+void image_apply_color_ramp(image_t *image, const color_ramp_t *color_ramp, blend_method_t blend_method);
 
 int image_color_from_string(color_t *dest, const char *str);
 
