@@ -30,8 +30,8 @@
 
 #define DOT_WIDTH_MILLIS (0.67f)
 
-#define PERLIN_INNER_OPACITY (0.8f)
-#define PERLIN_OUTER_OPACITY (0.8f)
+#define PERLIN_INNER_OPACITY (1.0f)
+#define PERLIN_OUTER_OPACITY (1.0f)
 
 
 void image_init(void) {
@@ -496,11 +496,12 @@ static float perlin_noise_for_pixel(perlin3d_t *perlin, unsigned texture_width, 
 
 
 static void inner_perlin_color_map(float color[4], float input) {
-  const float threshold = 0.15;
+  const float lower_threshold = -0.13;
+  const float upper_threshold = 0.13;
 
   memset(color, 0, 4 * sizeof(color[0]));
 
-  if (input > -threshold && input < threshold) {
+  if (input > lower_threshold && input < upper_threshold) {
     color[3] = 1;
     if (input > 0) {
       color[0] = 1;
